@@ -802,9 +802,9 @@ button,
   background: rgba(255, 255, 255, 0.08);
 }
 
-/* Agreement tiles carry the same header as a board tile. What differs is
-   what enlarging shows: a board opens its bands, an agreement its text. */
-.bob-agreement-tile .bob-board-title {
+/* Team tiles carry the same header as a board tile. What differs is
+   what enlarging shows: a board opens its bands, a team its text. */
+.bob-team-tile .bob-board-title {
   align-self: flex-start;
   flex: 0 0 auto;
   max-width: 100%;
@@ -832,7 +832,7 @@ button,
   font-weight: 600;
 }
 
-.bob-agreement-document {
+.bob-team-document {
   flex: 1 1 0;
   min-height: 0;
   overflow-y: auto;
@@ -842,24 +842,24 @@ button,
   padding: 0.6rem 0.75rem;
 }
 
-.bob-agreement-document h3 {
+.bob-team-document h3 {
   margin: 0.9rem 0 0.35rem;
   font-size: 0.9rem;
   color: #c9d1d9;
 }
 
-.bob-agreement-document h3:first-child {
+.bob-team-document h3:first-child {
   margin-top: 0;
 }
 
-.bob-agreement-clause {
+.bob-team-clause {
   margin: 0 0 0.35rem;
   font-size: 0.85rem;
   line-height: 1.45;
   color: #f0f6fc;
 }
 
-/* A team is its agreement, its actors and its roles. The three parts share
+/* A team is its team, its actors and its roles. The three parts share
    the document box, and split the tile's height between them - the text is
    the part that grows, the two lists stay short and scroll if they must. */
 .bob-team-part {
@@ -869,7 +869,7 @@ button,
   gap: 0.3rem;
 }
 
-.bob-team-part-agreement {
+.bob-team-part-team {
   flex: 2 1 0;
 }
 
@@ -1044,14 +1044,14 @@ button,
   color: #cf222e;
   border-color: #cf222e;
 }
-:root[data-theme="light"] .bob-agreement-document {
+:root[data-theme="light"] .bob-team-document {
   background: #fafbfc;
   border-color: #eaecef;
 }
-:root[data-theme="light"] .bob-agreement-document h3 {
+:root[data-theme="light"] .bob-team-document h3 {
   color: #57606a;
 }
-:root[data-theme="light"] .bob-agreement-clause {
+:root[data-theme="light"] .bob-team-clause {
   color: #1b1f23;
 }
 :root[data-theme="light"] .bob-team-part-label {

@@ -237,7 +237,7 @@ class AssetTests(unittest.TestCase):
 
     def test_assets_do_not_call_producer_controller_namespaces(self):
         self.assertNotIn("/api/kanban", self.cockpit)
-        self.assertNotIn("/api/agreement", self.cockpit)
+        self.assertNotIn("/api/team", self.cockpit)
         self.assertNotIn("/api/flow", self.cockpit)
 
     def test_cockpit_renders_one_application_identified_tile_stream(self):

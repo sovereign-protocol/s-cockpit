@@ -105,9 +105,9 @@ class BoardOfBoardsLogic:
             raise RuntimeError(self._kanban_facade_error)
         return facade
 
-    def _agreement(self):
-        # Optional, like the Kanban facade: the cockpit shows agreement tiles
-        # only when the agreement application is active in this host.
+    def _team(self):
+        # Optional, like the Kanban facade: the cockpit shows team tiles
+        # only when the team application is active in this host.
         if self.facades is None:
             return None
         try:
@@ -138,15 +138,15 @@ class BoardOfBoardsLogic:
             summaries.append(summary)
         return summaries
 
-    def _agreement_summaries(
+    def _team_summaries(
         self, network_by_topic: dict[str, dict] | None = None,
     ) -> list[dict]:
-        agreement = self._agreement()
-        if agreement is None:
+        team = self._team()
+        if team is None:
             return []
-        order = self._agreement_order()
-        nodes = agreement.agreements()
-        expanded_uuids = self._agreement_expanded()
+        order = self._team_order()
+        nodes = team.teams()
+        expanded_uuids = self._team_expanded()
         live = {node.uuid for node in nodes}
         expanded_uuids = [uuid for uuid in expanded_uuids if uuid in live]
         summaries = []
@@ -156,11 +156,11 @@ class BoardOfBoardsLogic:
                 else network_by_topic.get(node.uuid, {})
             )
             events = (
-                agreement.transition_events(node.uuid)
+                team.transition_events(node.uuid)
                 if network is None
-                else agreement.transition_events(node.uuid, network)
+                else team.transition_events(node.uuid, network)
             )
-            grouped = agreement.transition_by_node(events)
+            grouped = team.transition_by_node(events)
             unsettled = sum(
                 1 for value in grouped.values()
                 if value.get("type") not in (None, "in_agreement")
@@ -173,18 +173,18 @@ class BoardOfBoardsLogic:
                 "unsettled_count": unsettled,
                 "agenda_count": len(self.session.agenda_items(node.uuid)),
                 "expanded": expanded,
-                # A team is its agreement, its actors and its roles, and the
+                # A team is its team, its actors and its roles, and the
                 # enlarged tile shows all three. Only for the tile that is
                 # showing them - every summary carries this on a 1.5s poll
                 # otherwise.
                 "sections": (
-                    self._agreement_sections(agreement, node) if expanded else []
+                    self._team_sections(team, node) if expanded else []
                 ),
                 "actors": (
-                    self._agreement_actors(agreement, node) if expanded else []
+                    self._team_actors(team, node) if expanded else []
                 ),
                 "roles": (
-                    self._agreement_roles(agreement, node) if expanded else []
+                    self._team_roles(team, node) if expanded else []
                 ),
                 "order": order.get(node.uuid, 0),
                 "_transition_by_node": grouped,
@@ -193,7 +193,7 @@ class BoardOfBoardsLogic:
         return summaries
 
     @staticmethod
-    def _agreement_sections(facade, agreement: ProtocolNode) -> list[dict]:
+    def _team_sections(facade, team: ProtocolNode) -> list[dict]:
         return [
             {
                 "uuid": section.uuid,
@@ -203,11 +203,11 @@ class BoardOfBoardsLogic:
                     for clause in facade.clauses(section)
                 ],
             }
-            for section in facade.sections(agreement)
+            for section in facade.sections(team)
         ]
 
     @staticmethod
-    def _agreement_actors(facade, agreement: ProtocolNode) -> list[dict]:
+    def _team_actors(facade, team: ProtocolNode) -> list[dict]:
         """Who is in this team, and what each of them holds.
 
         Only accepted roles are named here. A tile has room for what is
@@ -228,11 +228,11 @@ class BoardOfBoardsLogic:
                     if item.get("status") == "accepted"
                 ],
             }
-            for person in facade.participants(agreement.uuid)
+            for person in facade.participants(team.uuid)
         ]
 
     @staticmethod
-    def _agreement_roles(facade, agreement: ProtocolNode) -> list[dict]:
+    def _team_roles(facade, team: ProtocolNode) -> list[dict]:
         """Every role this team defines, and who is holding it."""
         return [
             {
@@ -240,74 +240,74 @@ class BoardOfBoardsLogic:
                 "name": role.data.get("name", ""),
                 "holders": [
                     holder.get("name", "")
-                    for holder in facade.role_holders(agreement, role)
+                    for holder in facade.role_holders(team, role)
                     if holder.get("status") == "accepted"
                 ],
             }
-            for role in facade.roles(agreement)
+            for role in facade.roles(team)
         ]
 
-    def _agreement_order(self, *, mutable: bool = False) -> dict:
+    def _team_order(self, *, mutable: bool = False) -> dict:
         metadata = self._metadata()
         order = (
-            metadata.setdefault("agreement_order", {})
-            if mutable else metadata.get("agreement_order", {})
+            metadata.setdefault("team_order", {})
+            if mutable else metadata.get("team_order", {})
         )
         if not isinstance(order, dict):
             order = {}
             if mutable:
-                metadata["agreement_order"] = order
+                metadata["team_order"] = order
         return order
 
-    def _agreement_expanded(self, *, mutable: bool = False) -> list:
+    def _team_expanded(self, *, mutable: bool = False) -> list:
         metadata = self._metadata()
         expanded = (
-            metadata.setdefault("expanded_agreement_uuids", [])
-            if mutable else metadata.get("expanded_agreement_uuids", [])
+            metadata.setdefault("expanded_team_uuids", [])
+            if mutable else metadata.get("expanded_team_uuids", [])
         )
         if not isinstance(expanded, list):
             expanded = []
             if mutable:
-                metadata["expanded_agreement_uuids"] = expanded
+                metadata["expanded_team_uuids"] = expanded
         return expanded
 
     @_session_transaction
-    def set_agreement_expanded(self, agreement_uuid: str,
+    def set_team_expanded(self, team_uuid: str,
                                expanded: bool) -> SessionResult:
-        agreement = self._agreement()
-        if agreement is None:
-            return SessionResult("error", reason="Agreement application is not active")
-        if agreement_uuid not in {node.uuid for node in agreement.agreements()}:
-            return SessionResult("error", reason="agreement not found")
-        current = self._agreement_expanded(mutable=True)
-        if expanded and agreement_uuid not in current:
-            current.append(agreement_uuid)
-        elif not expanded and agreement_uuid in current:
-            current.remove(agreement_uuid)
-        return SessionResult("ok", value=agreement_uuid)
+        team = self._team()
+        if team is None:
+            return SessionResult("error", reason="Team application is not active")
+        if team_uuid not in {node.uuid for node in team.teams()}:
+            return SessionResult("error", reason="team not found")
+        current = self._team_expanded(mutable=True)
+        if expanded and team_uuid not in current:
+            current.append(team_uuid)
+        elif not expanded and team_uuid in current:
+            current.remove(team_uuid)
+        return SessionResult("ok", value=team_uuid)
 
     @_session_transaction
-    def reorder_agreements(self, agreement_uuids: list[str]) -> SessionResult:
-        agreement = self._agreement()
-        if agreement is None:
-            return SessionResult("error", reason="Agreement application is not active")
-        valid = {node.uuid for node in agreement.agreements()}
-        order = self._agreement_order(mutable=True)
+    def reorder_teams(self, team_uuids: list[str]) -> SessionResult:
+        team = self._team()
+        if team is None:
+            return SessionResult("error", reason="Team application is not active")
+        valid = {node.uuid for node in team.teams()}
+        order = self._team_order(mutable=True)
         for position, uuid in enumerate(
-            uuid for uuid in agreement_uuids if uuid in valid
+            uuid for uuid in team_uuids if uuid in valid
         ):
             order[uuid] = position
-        return SessionResult("ok", value=agreement_uuids)
+        return SessionResult("ok", value=team_uuids)
 
     def _normalized_tile_order(
         self,
         boards: list[dict],
-        agreements: list[dict],
+        teams: list[dict],
         processes: list[dict] | None = None,
     ) -> list[str]:
         candidates = [
             *(item["uuid"] for item in boards),
-            *(item["uuid"] for item in agreements),
+            *(item["uuid"] for item in teams),
             *(item["uuid"] for item in (processes or [])),
         ]
         valid = set(candidates)
@@ -330,7 +330,7 @@ class BoardOfBoardsLogic:
                 self._kanban().boards() if self._kanban() else []
             )),
             *(node.uuid for node in (
-                self._agreement().agreements() if self._agreement() else []
+                self._team().teams() if self._team() else []
             )),
             *(node.uuid for node in (
                 self._flow().processes() if self._flow() else []
@@ -353,10 +353,10 @@ class BoardOfBoardsLogic:
 
     @_session_transaction
     def select_topic(self, topic_uuid: str) -> SessionResult:
-        agreement = self._agreement()
+        team = self._team()
         valid = {
             *(board.uuid for board in (self._kanban().boards() if self._kanban() else [])),
-            *(node.uuid for node in (agreement.agreements() if agreement else [])),
+            *(node.uuid for node in (team.teams() if team else [])),
             *(node.uuid for node in (
                 self._flow().processes() if self._flow() else []
             )),
@@ -369,7 +369,7 @@ class BoardOfBoardsLogic:
     def _selected_topic(
         self,
         boards: list[dict],
-        agreements: list[dict],
+        teams: list[dict],
         processes: list[dict] | None = None,
     ) -> dict | None:
         topics = [
@@ -383,11 +383,11 @@ class BoardOfBoardsLogic:
             ),
             *(
                 {
-                    "uuid": agreement["uuid"],
-                    "title": agreement["title"],
+                    "uuid": team["uuid"],
+                    "title": team["title"],
                     "application_id": TEAM_APPLICATION_ID,
                 }
-                for agreement in agreements
+                for team in teams
             ),
             *(
                 {
@@ -418,7 +418,7 @@ class BoardOfBoardsLogic:
             }
         facade = {
             INITIATIVE_APPLICATION_ID: self._kanban,
-            TEAM_APPLICATION_ID: self._agreement,
+            TEAM_APPLICATION_ID: self._team,
             FLOW_APPLICATION_ID: self._flow,
         }.get(selected["application_id"], lambda: None)()
         if not facade:
@@ -443,7 +443,7 @@ class BoardOfBoardsLogic:
         creatable = [
             {"application_id": INITIATIVE_APPLICATION_ID, "label": "Initiative"},
         ]
-        if self._agreement() is not None:
+        if self._team() is not None:
             creatable.append(
                 {"application_id": TEAM_APPLICATION_ID, "label": "Team"}
             )
@@ -454,16 +454,16 @@ class BoardOfBoardsLogic:
                     "label": "Flow",
                 }
             )
-        agreements = self._agreement_summaries(network_by_topic)
+        teams = self._team_summaries(network_by_topic)
         processes = self._flow_summaries()
         if kanban is None:
-            selected = self._selected_topic([], agreements, processes)
+            selected = self._selected_topic([], teams, processes)
             return {
                 "boards": [],
-                "agreements": agreements,
+                "teams": teams,
                 "processes": processes,
                 "tile_order": self._normalized_tile_order(
-                    [], agreements, processes,
+                    [], teams, processes,
                 ),
                 "creatable": creatable,
                 "people": [],
@@ -497,14 +497,14 @@ class BoardOfBoardsLogic:
                 ),
             )
         ]
-        selected = self._selected_topic(boards_out, agreements, processes)
+        selected = self._selected_topic(boards_out, teams, processes)
         for board in boards_out:
             board["selected_topic"] = bool(
                 selected and board["uuid"] == selected["uuid"]
             )
-        for agreement in agreements:
-            agreement["selected_topic"] = bool(
-                selected and agreement["uuid"] == selected["uuid"]
+        for team in teams:
+            team["selected_topic"] = bool(
+                selected and team["uuid"] == selected["uuid"]
             )
         for process in processes:
             process["selected_topic"] = bool(
@@ -512,10 +512,10 @@ class BoardOfBoardsLogic:
             )
         return {
             "boards": boards_out,
-            "agreements": agreements,
+            "teams": teams,
             "processes": processes,
             "tile_order": self._normalized_tile_order(
-                boards_out, agreements, processes,
+                boards_out, teams, processes,
             ),
             "creatable": creatable,
             # Every peer this session knows about, for the card-edit modal's
@@ -544,13 +544,13 @@ class BoardOfBoardsLogic:
                 }
                 for board in (kanban.boards() if kanban else [])
             ]
-            agreement = self._agreement()
-            agreements = [
+            team = self._team()
+            teams = [
                 {
                     "uuid": node.uuid,
                     "title": node.data.get("title", ""),
                 }
-                for node in (agreement.agreements() if agreement else [])
+                for node in (team.teams() if team else [])
             ]
             flow = self._flow()
             processes = [
@@ -560,7 +560,7 @@ class BoardOfBoardsLogic:
                 }
                 for node in (flow.processes() if flow else [])
             ]
-            selected = self._selected_topic(boards, agreements, processes)
+            selected = self._selected_topic(boards, teams, processes)
         return {
             "selected_topic": selected,
             **self._collaboration_context(
@@ -617,7 +617,7 @@ class BoardOfBoardsLogic:
 
     def _topic_descriptors(self) -> list[dict]:
         kanban = self._kanban()
-        agreement = self._agreement()
+        team = self._team()
         return [
             *(
                 {
@@ -631,7 +631,7 @@ class BoardOfBoardsLogic:
                     "uuid": node.uuid,
                     "application_id": TEAM_APPLICATION_ID,
                 }
-                for node in (agreement.agreements() if agreement else [])
+                for node in (team.teams() if team else [])
             ),
             *(
                 {
@@ -682,14 +682,14 @@ class BoardOfBoardsLogic:
                     item for item in card.get("perspectives", [])
                     if item.get("peer_addr") in visible_peers
                 ]
-        for agreement in payload.get("agreements", []):
-            topic_uuid = agreement.get("uuid")
+        for team in payload.get("teams", []):
+            topic_uuid = team.get("uuid")
             grouped = cls._filter_transition_groups(
-                agreement.pop("_transition_by_node", {}),
+                team.pop("_transition_by_node", {}),
                 observations.get(topic_uuid, {}),
                 TEAM_APPLICATION_ID,
             )
-            agreement["unsettled_count"] = sum(
+            team["unsettled_count"] = sum(
                 1 for value in grouped.values()
                 if value.get("type") not in (None, "in_agreement")
             )
@@ -1168,76 +1168,76 @@ class BoardOfBoardsLogic:
             if kanban else SessionResult("error", reason=self._kanban_facade_error)
         )
 
-    def create_agreement(self, title: str) -> SessionResult:
-        agreement = self._agreement()
+    def create_team(self, title: str) -> SessionResult:
+        team = self._team()
         return (
-            agreement.create_agreement(title)
-            if agreement else SessionResult(
-                "error", reason="Agreement application is not active",
+            team.create_team(title)
+            if team else SessionResult(
+                "error", reason="Team application is not active",
             )
         )
 
-    def clone_agreement(
-        self, agreement_uuid: str, title: str | None = None,
+    def clone_team(
+        self, team_uuid: str, title: str | None = None,
     ) -> SessionResult:
-        """Start a new agreement from an existing one, as a board copy does."""
-        agreement = self._agreement()
+        """Start a new team from an existing one, as a board copy does."""
+        team = self._team()
         return (
-            agreement.clone_agreement(agreement_uuid, title)
-            if agreement else SessionResult(
-                "error", reason="Agreement application is not active",
+            team.clone_team(team_uuid, title)
+            if team else SessionResult(
+                "error", reason="Team application is not active",
             )
         )
 
-    def delete_agreement(self, agreement_uuid: str) -> SessionResult:
-        agreement = self._agreement()
+    def delete_team(self, team_uuid: str) -> SessionResult:
+        team = self._team()
         return (
-            agreement.delete_agreement(agreement_uuid)
-            if agreement else SessionResult(
-                "error", reason="Agreement application is not active",
+            team.delete_team(team_uuid)
+            if team else SessionResult(
+                "error", reason="Team application is not active",
             )
         )
 
-    def create_agreement_agenda_item(
-        self, agreement_uuid: str, text: str,
+    def create_team_agenda_item(
+        self, team_uuid: str, text: str,
         priority: str | None = None,
     ) -> SessionResult:
-        agreement = self._agreement()
+        team = self._team()
         return (
-            agreement.create_agenda_item(agreement_uuid, text, priority)
-            if agreement else SessionResult(
-                "error", reason="Agreement application is not active",
+            team.create_agenda_item(team_uuid, text, priority)
+            if team else SessionResult(
+                "error", reason="Team application is not active",
             )
         )
 
-    def delete_agreement_agenda_item(self, item_uuid: str) -> SessionResult:
-        agreement = self._agreement()
+    def delete_team_agenda_item(self, item_uuid: str) -> SessionResult:
+        team = self._team()
         return (
-            agreement.delete_agenda_item(item_uuid)
-            if agreement else SessionResult(
-                "error", reason="Agreement application is not active",
+            team.delete_agenda_item(item_uuid)
+            if team else SessionResult(
+                "error", reason="Team application is not active",
             )
         )
 
-    def prioritize_agreement_agenda_item(
+    def prioritize_team_agenda_item(
         self, item_uuid: str, priority: str | None,
     ) -> SessionResult:
-        agreement = self._agreement()
+        team = self._team()
         return (
-            agreement.set_agenda_item_priority(item_uuid, priority)
-            if agreement else SessionResult(
-                "error", reason="Agreement application is not active",
+            team.set_agenda_item_priority(item_uuid, priority)
+            if team else SessionResult(
+                "error", reason="Team application is not active",
             )
         )
 
-    def move_agreement_agenda_item(
+    def move_team_agenda_item(
         self, item_uuid: str, index: int,
     ) -> SessionResult:
-        agreement = self._agreement()
+        team = self._team()
         return (
-            agreement.move_agenda_item(item_uuid, index)
-            if agreement else SessionResult(
-                "error", reason="Agreement application is not active",
+            team.move_agenda_item(item_uuid, index)
+            if team else SessionResult(
+                "error", reason="Team application is not active",
             )
         )
 

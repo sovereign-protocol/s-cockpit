@@ -52,11 +52,11 @@ def build_routes(logic, runtime) -> list[Route]:
             runtime, data, lambda: logic.toggle_selected(data["card_uuid"]),
         )
 
-    async def api_reorder_agreements(request: Request):
+    async def api_reorder_teams(request: Request):
         data = await request.json()
         return await _mutation_result(
             runtime, data,
-            lambda: logic.reorder_agreements(data.get("agreement_uuids", [])),
+            lambda: logic.reorder_teams(data.get("team_uuids", [])),
         )
 
     async def api_reorder_tiles(request: Request):
@@ -66,10 +66,10 @@ def build_routes(logic, runtime) -> list[Route]:
             lambda: logic.reorder_tiles(data.get("tile_uuids", [])),
         )
 
-    async def api_agreement_settings(request: Request):
+    async def api_team_settings(request: Request):
         data = await request.json()
-        return await _mutation_result(runtime, data, lambda: logic.set_agreement_expanded(
-            data["agreement_uuid"], bool(data.get("expanded")),
+        return await _mutation_result(runtime, data, lambda: logic.set_team_expanded(
+            data["team_uuid"], bool(data.get("expanded")),
         ))
 
     async def api_select_topic(request: Request):
@@ -178,53 +178,53 @@ def build_routes(logic, runtime) -> list[Route]:
             data["board_uuid"], data.get("name", "Kanban Board"),
         ))
 
-    async def api_create_agreement(request: Request):
+    async def api_create_team(request: Request):
         data = await request.json()
         return await _mutation_result(
             runtime, data,
-            lambda: logic.create_agreement(data.get("title", "")),
+            lambda: logic.create_team(data.get("title", "")),
         )
 
-    async def api_clone_agreement(request: Request):
+    async def api_clone_team(request: Request):
         data = await request.json()
         return await _mutation_result(
-            runtime, data, lambda: logic.clone_agreement(
-                data["agreement_uuid"], data.get("title"),
+            runtime, data, lambda: logic.clone_team(
+                data["team_uuid"], data.get("title"),
             ),
         )
 
-    async def api_delete_agreement(request: Request):
+    async def api_delete_team(request: Request):
         data = await request.json()
         return await _mutation_result(
-            runtime, data, lambda: logic.delete_agreement(data["agreement_uuid"]),
+            runtime, data, lambda: logic.delete_team(data["team_uuid"]),
         )
 
-    async def api_create_agreement_agenda(request: Request):
+    async def api_create_team_agenda(request: Request):
         data = await request.json()
         return await _mutation_result(
-            runtime, data, lambda: logic.create_agreement_agenda_item(
-            data["agreement_uuid"], data.get("text", ""), data.get("priority"),
+            runtime, data, lambda: logic.create_team_agenda_item(
+            data["team_uuid"], data.get("text", ""), data.get("priority"),
         ))
 
-    async def api_delete_agreement_agenda(request: Request):
+    async def api_delete_team_agenda(request: Request):
         data = await request.json()
         return await _mutation_result(
             runtime, data,
-            lambda: logic.delete_agreement_agenda_item(data["item_uuid"]),
+            lambda: logic.delete_team_agenda_item(data["item_uuid"]),
         )
 
-    async def api_prioritize_agreement_agenda(request: Request):
+    async def api_prioritize_team_agenda(request: Request):
         data = await request.json()
         return await _mutation_result(
-            runtime, data, lambda: logic.prioritize_agreement_agenda_item(
+            runtime, data, lambda: logic.prioritize_team_agenda_item(
                 data["item_uuid"], data.get("priority"),
             ),
         )
 
-    async def api_move_agreement_agenda(request: Request):
+    async def api_move_team_agenda(request: Request):
         data = await request.json()
         return await _mutation_result(
-            runtime, data, lambda: logic.move_agreement_agenda_item(
+            runtime, data, lambda: logic.move_team_agenda_item(
             data["item_uuid"], int(data.get("index", 0)),
         ))
 
@@ -289,11 +289,11 @@ def build_routes(logic, runtime) -> list[Route]:
         Route("/api/cockpit/boards/pick", api_pick_board, methods=["POST"]),
         Route("/api/cockpit/boards/unpick", api_unpick_board, methods=["POST"]),
         Route("/api/cockpit/boards/reorder", api_reorder_boards, methods=["POST"]),
-        Route("/api/cockpit/agreements/reorder", api_reorder_agreements,
+        Route("/api/cockpit/teams/reorder", api_reorder_teams,
               methods=["POST"]),
         Route("/api/cockpit/tiles/reorder", api_reorder_tiles,
               methods=["POST"]),
-        Route("/api/cockpit/agreements/settings", api_agreement_settings,
+        Route("/api/cockpit/teams/settings", api_team_settings,
               methods=["POST"]),
         Route("/api/cockpit/topics/select", api_select_topic,
               methods=["POST"]),
@@ -329,20 +329,20 @@ def build_routes(logic, runtime) -> list[Route]:
               methods=["POST"]),
         Route("/api/cockpit/kanban/boards/rename", api_rename_board,
               methods=["POST"]),
-        Route("/api/cockpit/agreement/agreements/create",
-              api_create_agreement, methods=["POST"]),
-        Route("/api/cockpit/agreement/agreements/clone",
-              api_clone_agreement, methods=["POST"]),
-        Route("/api/cockpit/agreement/agreements/delete",
-              api_delete_agreement, methods=["POST"]),
-        Route("/api/cockpit/agreement/agenda/create",
-              api_create_agreement_agenda, methods=["POST"]),
-        Route("/api/cockpit/agreement/agenda/delete",
-              api_delete_agreement_agenda, methods=["POST"]),
-        Route("/api/cockpit/agreement/agenda/set_priority",
-              api_prioritize_agreement_agenda, methods=["POST"]),
-        Route("/api/cockpit/agreement/agenda/move",
-              api_move_agreement_agenda, methods=["POST"]),
+        Route("/api/cockpit/team/teams/create",
+              api_create_team, methods=["POST"]),
+        Route("/api/cockpit/team/teams/clone",
+              api_clone_team, methods=["POST"]),
+        Route("/api/cockpit/team/teams/delete",
+              api_delete_team, methods=["POST"]),
+        Route("/api/cockpit/team/agenda/create",
+              api_create_team_agenda, methods=["POST"]),
+        Route("/api/cockpit/team/agenda/delete",
+              api_delete_team_agenda, methods=["POST"]),
+        Route("/api/cockpit/team/agenda/set_priority",
+              api_prioritize_team_agenda, methods=["POST"]),
+        Route("/api/cockpit/team/agenda/move",
+              api_move_team_agenda, methods=["POST"]),
         Route("/api/cockpit/flow/processes/create",
               api_create_flow_process, methods=["POST"]),
         Route("/api/cockpit/flow/processes/delete",
