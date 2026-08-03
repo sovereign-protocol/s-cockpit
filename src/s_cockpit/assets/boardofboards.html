@@ -132,7 +132,7 @@
           '<rect x="4" y="4" width="4" height="16" rx="1"></rect>' +
           '<rect x="10" y="4" width="4" height="11" rx="1"></rect>' +
           '<rect x="16" y="4" width="4" height="7" rx="1"></rect>',
-        agreement:
+        team:
           '<path d="M6 3h8l4 4v14H6z"></path>' +
           '<path d="M14 3v4h4"></path><path d="M9 13h6"></path>' +
           '<path d="M9 17h6"></path>',
@@ -422,7 +422,7 @@
         const main = document.createElement("div");
         main.className = "bob-board-main";
         const title = topicTitle(
-          "agreement",
+          "team",
           agreement.title || "Untitled team",
           `/apps/team?agreement=${encodeURIComponent(agreement.uuid)}`,
         );

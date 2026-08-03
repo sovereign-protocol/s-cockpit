@@ -53,7 +53,7 @@ class _StubTeamFacade:
 
     def create(self, title):
         node = self.session.create_child(
-            self.session.root_uuid(), {"type": "agreement", "title": title}, {},
+            self.session.root_uuid(), {"type": "team", "title": title}, {},
         ).value
         self.uuids.append(node.uuid)
         return node.uuid
@@ -61,21 +61,21 @@ class _StubTeamFacade:
     def add_section(self, agreement_uuid, title, order=0):
         return self.session.create_child(
             agreement_uuid,
-            {"type": "agreement_section", "title": title, "order": order},
+            {"type": "team_section", "title": title, "order": order},
             {},
         ).value.uuid
 
     def add_clause(self, section_uuid, text, order=0):
         return self.session.create_child(
             section_uuid,
-            {"type": "agreement_clause", "text": text, "order": order},
+            {"type": "team_clause", "text": text, "order": order},
             {},
         ).value.uuid
 
     def add_role(self, agreement_uuid, name, order=0):
         return self.session.create_child(
             agreement_uuid,
-            {"type": "agreement_role", "name": name, "order": order},
+            {"type": "team_role", "name": name, "order": order},
             {},
         ).value.uuid
 
@@ -95,13 +95,13 @@ class _StubTeamFacade:
         return [node for node in nodes if node and not node.deleted]
 
     def sections(self, agreement):
-        return self._ordered(agreement, "agreement_section")
+        return self._ordered(agreement, "team_section")
 
     def clauses(self, section):
-        return self._ordered(section, "agreement_clause")
+        return self._ordered(section, "team_clause")
 
     def roles(self, agreement):
-        return self._ordered(agreement, "agreement_role")
+        return self._ordered(agreement, "team_role")
 
     def role_holders(self, agreement, role):
         return list(self.holders.get(role.uuid, []))
