@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Root S-Team topics are presented as **Organizations** while nested topics
+  remain Teams. The distinction comes from S-Team's facade projection; the
+  Cockpit stores no second topic or Actor kind.
 - Creating a Flow now opens a modal for its name and one of S-Flow's bundled
   templates. A Flow tile's settings let its creator delete its local copy or
   an invitee leave it locally, after confirmation.

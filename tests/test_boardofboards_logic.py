@@ -50,6 +50,7 @@ class _StubTeamFacade:
         self.uuids = []
         self.observed_networks = []
         self.holders = {}
+        self.non_roots = set()
 
     def create(self, title):
         node = self.session.create_child(
@@ -102,6 +103,9 @@ class _StubTeamFacade:
 
     def roles(self, team):
         return self._ordered(team, "team_role")
+
+    def is_organization(self, team):
+        return team.uuid not in self.non_roots
 
     def role_holders(self, team, role):
         return list(self.holders.get(role.uuid, []))
@@ -854,9 +858,29 @@ class BoardOfBoardsLogicTests(unittest.TestCase):
         summary = bob.summary_payload()["teams"][0]
 
         self.assertEqual(summary["uuid"], team_uuid)
+        self.assertTrue(summary["is_organization"])
         self.assertEqual(summary["agenda_count"], 1)
         self.assertFalse(summary["expanded"])
         self.assertEqual(summary["sections"], [])
+        self.assertIn(
+            {"application_id": "team", "label": "Organization"},
+            bob.summary_payload()["creatable"],
+        )
+
+    def test_cockpit_preserves_team_s_contextual_organization_projection(self):
+        runtime = self.runtime(8531)
+        team = _StubTeamFacade(runtime.session)
+        bob = cockpit(runtime, team)
+        organization_uuid = team.create("Cooperative")
+        subteam_uuid = team.create("Research")
+        team.non_roots.add(subteam_uuid)
+
+        summaries = {
+            item["uuid"]: item for item in bob.summary_payload()["teams"]
+        }
+
+        self.assertTrue(summaries[organization_uuid]["is_organization"])
+        self.assertFalse(summaries[subteam_uuid]["is_organization"])
 
     def test_team_agenda_items_can_be_reordered_through_the_facade(self):
         runtime = self.runtime(8530)

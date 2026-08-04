@@ -245,6 +245,15 @@ class AssetTests(unittest.TestCase):
         self.assertIn("/api/cockpit/flow/processes/leave", self.cockpit)
         self.assertIn("process.can_delete", self.cockpit)
 
+    def test_root_team_creation_and_expansion_use_organization_wording(self):
+        self.assertIn("<h2>New Organization</h2>", self.cockpit)
+        self.assertIn('value="Untitled organization"', self.cockpit)
+        self.assertIn('"Organization created"', self.cockpit)
+        self.assertIn(
+            'team.is_organization ? "Organization" : "Team"',
+            self.cockpit,
+        )
+
     def test_assets_do_not_call_producer_controller_namespaces(self):
         self.assertNotIn("/api/kanban", self.cockpit)
         self.assertNotIn("/api/team", self.cockpit)

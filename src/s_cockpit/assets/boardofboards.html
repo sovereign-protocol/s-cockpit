@@ -54,8 +54,8 @@
 
     <dialog id="agreementSettingsModal">
       <div class="bob-manage">
-        <h2 id="agreementSettingsTitle">Team settings</h2>
-        <p class="bob-hint">
+        <h2 id="agreementSettingsTitle">Organization settings</h2>
+        <p class="bob-hint" id="teamSettingsHint">
           A team has nothing to map onto bands the way an initiative does, so this is where deleting
           one lives.
         </p>
@@ -91,8 +91,8 @@
 
     <dialog id="newTeamModal">
       <form method="dialog" id="newTeamForm">
-        <h2>New Team</h2>
-        <label>Name<input id="newTeamName" value="Untitled team" /></label>
+        <h2>New Organization</h2>
+        <label>Name<input id="newTeamName" value="Untitled organization" /></label>
         <label>Copy from (optional)<select id="newTeamTemplate"></select></label>
         <menu>
           <button type="button" id="cancelNewTeamBtn">Cancel</button>
@@ -432,7 +432,11 @@
         // the order they are agreed: what was agreed, who is in it, and what
         // they hold.
         panel.append(
-          teamPart("Team", agreementDocument(team)),
+          teamPart(
+            team.is_organization ? "Organization" : "Team",
+            agreementDocument(team),
+            "team",
+          ),
           teamPart("Actors", agreementActors(team)),
           teamPart("Roles", agreementRoles(team)),
         );
@@ -490,9 +494,9 @@
 
       // One part of a team - its name, and the box that shows it. The three
       // parts share a shape so the tile reads as one thing rather than three.
-      function teamPart(label, body) {
+      function teamPart(label, body, kind = label) {
         const part = document.createElement("div");
-        part.className = `bob-team-part bob-team-part-${label.toLowerCase()}`;
+        part.className = `bob-team-part bob-team-part-${kind.toLowerCase()}`;
         const heading = document.createElement("h3");
         heading.className = "bob-team-part-label";
         heading.textContent = label;
@@ -1091,6 +1095,11 @@
       function openTeamSettings(team) {
         settingsTeam = team;
         el("agreementSettingsTitle").textContent = team.title || "Untitled team";
+        const kind = team.is_organization ? "organization" : "team";
+        el("teamSettingsHint").textContent =
+          `A ${kind} has nothing to map onto bands the way an initiative does, ` +
+          "so this is where deleting one lives.";
+        el("deleteTeamBtn").textContent = `Delete ${kind}`;
         el("agreementSettingsModal").showModal();
       }
 
@@ -1147,9 +1156,11 @@
       el("deleteTeamBtn").onclick = () => {
         const team = settingsTeam;
         if (!team) return;
+        const kind = team.is_organization ? "organization" : "team";
+        const label = team.is_organization ? "Organization" : "Team";
         confirmAction(
-          "Delete this team?",
-          "This removes the team and all of its sections and clauses, " +
+          `Delete this ${kind}?`,
+          `This removes the ${kind} and all of its sections and clauses, ` +
             "and stops sharing it. This cannot be undone.",
           () => {
             el("agreementSettingsModal").close();
@@ -1158,7 +1169,7 @@
                 request("/api/cockpit/team/teams/delete", {
                   team_uuid: team.uuid,
                 }),
-              "Team deleted",
+              `${label} deleted`,
             );
           },
         );
@@ -1412,7 +1423,7 @@
       // A team copied this way arrives with the text and the roles and
       // nobody in it, which is what a template is.
       function openNewTeamModal() {
-        el("newTeamName").value = "Untitled team";
+        el("newTeamName").value = "Untitled organization";
         const select = el("newTeamTemplate");
         select.replaceChildren();
         const empty = document.createElement("option");
@@ -1509,7 +1520,7 @@
       el("cancelNewTeamBtn").onclick = () => el("newTeamModal").close();
       el("newTeamForm").addEventListener("submit", (event) => {
         event.preventDefault();
-        const title = el("newTeamName").value || "Untitled team";
+        const title = el("newTeamName").value || "Untitled organization";
         const templateUuid = el("newTeamTemplate").value;
         el("newTeamModal").close();
         // One request either way: clone takes the title, so unlike a board
@@ -1524,7 +1535,7 @@
               : request("/api/cockpit/team/teams/create", {
                   title,
                 }),
-          "Team created",
+          "Organization created",
         );
       });
 

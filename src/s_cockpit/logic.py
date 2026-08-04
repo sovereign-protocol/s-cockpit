@@ -172,10 +172,17 @@ class BoardOfBoardsLogic:
                 if value.get("type") not in (None, "in_agreement")
             )
             expanded = node.uuid in expanded_uuids
+            classify = getattr(team, "is_organization", None)
             summaries.append({
                 "uuid": node.uuid,
                 "title": node.data.get("title", ""),
                 "application_id": TEAM_APPLICATION_ID,
+                # Organization is contextual vocabulary for a root Team, not
+                # another application or Actor kind. Older facade providers
+                # predate the projection and can only have supplied roots.
+                "is_organization": (
+                    bool(classify(node)) if callable(classify) else True
+                ),
                 "unsettled_count": unsettled,
                 "agenda_count": len(self.session.agenda_items(node.uuid)),
                 "expanded": expanded,
@@ -451,7 +458,7 @@ class BoardOfBoardsLogic:
         ]
         if self._team() is not None:
             creatable.append(
-                {"application_id": TEAM_APPLICATION_ID, "label": "Team"}
+                {"application_id": TEAM_APPLICATION_ID, "label": "Organization"}
             )
         if self._flow() is not None:
             creatable.append(
