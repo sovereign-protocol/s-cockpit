@@ -22,8 +22,6 @@
 
     <main id="boards" class="bob-boards"></main>
 
-    <div id="reactionMenu" class="reaction-menu" role="menu" hidden></div>
-
     <dialog id="cardModal">
       <form method="dialog" id="cardForm">
         <h2 id="cardModalTitle">Edit Card</h2>
@@ -68,6 +66,17 @@
       </div>
     </dialog>
 
+    <dialog id="flowSettingsModal">
+      <div class="bob-manage">
+        <h2 id="flowSettingsTitle">Flow settings</h2>
+        <p id="flowSettingsHint" class="bob-hint"></p>
+        <menu>
+          <button type="button" id="deleteFlowBtn" class="danger">Remove flow</button>
+          <button type="button" id="cancelFlowSettingsBtn">Cancel</button>
+        </menu>
+      </div>
+    </dialog>
+
     <dialog id="newBoardModal">
       <form method="dialog" id="newBoardForm">
         <h2>New Initiative</h2>
@@ -87,6 +96,19 @@
         <label>Copy from (optional)<select id="newTeamTemplate"></select></label>
         <menu>
           <button type="button" id="cancelNewTeamBtn">Cancel</button>
+          <button type="submit" class="primary">Create</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog id="newFlowModal">
+      <form method="dialog" id="newFlowForm">
+        <h2>New Flow</h2>
+        <label>Name<input id="newFlowName" value="Untitled flow" /></label>
+        <label>Template<select id="newFlowTemplate" required></select></label>
+        <p id="newFlowTemplateDescription" class="bob-hint"></p>
+        <menu>
+          <button type="button" id="cancelNewFlowBtn">Cancel</button>
           <button type="submit" class="primary">Create</button>
         </menu>
       </form>
@@ -115,6 +137,7 @@
       let modalReadOnlyPerspective = false;
       let settingsBoard = null;
       let settingsTeam = null;
+      let settingsFlow = null;
       const AUTO_ADOPT_LABELS = {
         always: "Always",
         not_owner: "Except cards I own",
@@ -385,6 +408,9 @@
         controls.append(moveButton("<", index === 0, () => moveTile(process, -1)));
         controls.append(moveButton(">", index >= total - 1, () => moveTile(process, 1)));
         controls.append(iconButton(ICON_SHARE, "Share", () => openShareModal(process)));
+        if (process.can_delete || process.can_leave) {
+          controls.append(iconButton(ICON_SETTINGS, "Settings", () => openFlowSettings(process)));
+        }
         const status = document.createElement("div");
         status.className = "bob-board-status";
         status.append(
@@ -859,93 +885,33 @@
         wrap.className = "bob-card-discussion-tools";
         const info = card.transition;
         if (!info || ["settled", "in_flight"].includes(info.stage)) return wrap;
-        wrap.append(reactionButton(card));
+        // The control is Core's, so a divergence offers the same acts, worded
+        // the same way, whether it is met here or in the application itself.
+        const control = SovereignUI.reactionControl({
+          info,
+          className: "bob-react",
+          onReact: (choice) => applyReaction(card.uuid, choice),
+        });
+        if (control) wrap.append(control);
         return wrap;
       }
 
-      function reactionButton(card) {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "bob-react";
-        button.setAttribute("aria-label", "React to differences");
-        button.title = transitionLabel(card.transition);
-        button.textContent = "React";
-        const events = (card.transition?.events || [card.transition]).filter(
-          (event) => event && event.type !== "in_agreement",
+      async function applyReaction(uuid, choice) {
+        const endpoint =
+          choice.action === "rollback"
+            ? "/api/cockpit/kanban/rollback"
+            : "/api/cockpit/kanban/adopt";
+        await run(
+          (request) =>
+            request(endpoint, {
+              source_addr: choice.peerAddr,
+              node_uuid: uuid,
+              adopt_absence: choice.action === "adopt" && choice.absent,
+              rollback_absence: choice.action === "rollback" && choice.absent,
+            }),
+          choice.action === "rollback" ? "Rolled back" : "Adopted",
         );
-        const reactions = events.map((event) => ({
-          // Same wording as Kanban, from Core: named for the act, from the
-          // side being offered the choice.
-          label: transitionReactionLabel(event),
-          action: event.reaction || "adopt",
-          event,
-        }));
-        button.onclick = (event) => {
-          event.stopPropagation();
-          openReactionMenu(button, card, reactions);
-        };
-        return button;
       }
-
-      function closeReactionMenu() {
-        const menu = el("reactionMenu");
-        menu.hidden = true;
-        menu.replaceChildren();
-      }
-
-      function openReactionMenu(anchor, card, reactions) {
-        if (!reactions.length) return;
-        const menu = el("reactionMenu");
-        menu.replaceChildren();
-        for (const reaction of reactions) {
-          const option = document.createElement("button");
-          option.type = "button";
-          option.className = "reaction-menu-option";
-          option.textContent = reaction.label;
-          option.onclick = async (event) => {
-            event.stopPropagation();
-            closeReactionMenu();
-            const missing = reaction.event.type === "peer_missing_node";
-            const endpoint =
-              reaction.action === "rollback"
-                ? "/api/cockpit/kanban/rollback"
-                : "/api/cockpit/kanban/adopt";
-            await run(
-              (request) =>
-                request(endpoint, {
-                  source_addr: reaction.event.peer_addr,
-                  node_uuid: card.uuid,
-                  adopt_absence: reaction.action === "adopt" && missing,
-                  rollback_absence: reaction.action === "rollback" && missing,
-                }),
-              reaction.action === "rollback" ? "Rolled back" : "Adopted",
-            );
-          };
-          menu.append(option);
-        }
-        menu.hidden = false;
-        const rect = anchor.getBoundingClientRect();
-        const margin = 8;
-        const left = Math.max(
-          margin,
-          Math.min(rect.left, window.innerWidth - menu.offsetWidth - margin),
-        );
-        let top = rect.bottom + 4;
-        if (top + menu.offsetHeight > window.innerHeight - margin) {
-          top = Math.max(margin, rect.top - menu.offsetHeight - 4);
-        }
-        menu.style.left = `${left}px`;
-        menu.style.top = `${top}px`;
-      }
-
-      document.addEventListener("click", (event) => {
-        if (!event.target.closest("#reactionMenu")) closeReactionMenu();
-      });
-      document.addEventListener("keydown", (event) => {
-        if (event.key === "Escape") closeReactionMenu();
-      });
-      window.addEventListener("resize", closeReactionMenu);
-      window.addEventListener("scroll", closeReactionMenu, true);
 
       function peerLabel(address) {
         const user = (state.users || []).find((item) => item.address === address);
@@ -1128,6 +1094,16 @@
         el("agreementSettingsModal").showModal();
       }
 
+      function openFlowSettings(process) {
+        settingsFlow = process;
+        el("flowSettingsTitle").textContent = process.title || "Untitled flow";
+        el("deleteFlowBtn").textContent = process.can_delete ? "Delete flow" : "Leave flow";
+        el("flowSettingsHint").textContent = process.can_delete
+          ? "Deleting removes this flow and its history from this client. Other participants keep their copies."
+          : "Leaving removes this shared flow from your Cockpit without deleting it for its creator.";
+        el("flowSettingsModal").showModal();
+      }
+
       function selectField(id, text, columns, value) {
         const label = document.createElement("label");
         label.textContent = text;
@@ -1183,6 +1159,29 @@
                   team_uuid: team.uuid,
                 }),
               "Team deleted",
+            );
+          },
+        );
+      };
+      el("cancelFlowSettingsBtn").onclick = () => el("flowSettingsModal").close();
+      el("deleteFlowBtn").onclick = () => {
+        const process = settingsFlow;
+        if (!process) return;
+        const leaving = !process.can_delete;
+        confirmAction(
+          leaving ? "Leave this flow?" : "Delete this flow?",
+          leaving
+            ? "This removes the shared flow from your Cockpit. The creator keeps it."
+            : "This removes the flow, its workflow history and its agenda, and stops sharing it. This cannot be undone.",
+          () => {
+            el("flowSettingsModal").close();
+            return run(
+              (request) => request(leaving
+                ? "/api/cockpit/flow/processes/leave"
+                : "/api/cockpit/flow/processes/delete", {
+                process_uuid: process.uuid,
+              }),
+              leaving ? "Flow removed" : "Flow deleted",
             );
           },
         );
@@ -1375,6 +1374,12 @@
             : null,
         autoAdoptLabels: AUTO_ADOPT_LABELS,
         autoAdoptDescriptions: AUTO_ADOPT_DESCRIPTIONS,
+        // Reacting from the pane is offered only where the Cockpit has routes
+        // to honour it. It carries a board's decisions; a team's or a
+        // process's are settled in that application, so their divergences stay
+        // shown here and answered there.
+        canReact: () => state?.selected_topic?.application_id === "initiative",
+        reactNode: (uuid, choice) => applyReaction(uuid, choice),
         sessionView,
         onChanged: () => load(),
       });
@@ -1423,16 +1428,26 @@
         el("newTeamModal").showModal();
       }
 
-      function createFlow() {
-        return run(
-          (request) =>
-            request("/api/cockpit/flow/processes/create", {
-              title: "Untitled flow",
-              definition_id: "integrative-election",
-              definition_version: "0.2.0",
-            }),
-          "Flow created",
-        );
+      function openNewFlowModal() {
+        el("newFlowName").value = "Untitled flow";
+        const select = el("newFlowTemplate");
+        select.replaceChildren();
+        for (const template of state.flow_templates || []) {
+          const option = document.createElement("option");
+          option.value = template.id;
+          option.textContent = template.name;
+          option.dataset.version = template.version;
+          select.append(option);
+        }
+        const updateDescription = () => {
+          const template = (state.flow_templates || []).find(
+            (item) => item.id === select.value,
+          );
+          el("newFlowTemplateDescription").textContent = template?.description || "";
+        };
+        select.onchange = updateDescription;
+        updateDescription();
+        el("newFlowModal").showModal();
       }
 
       function closeAddNewMenu() {
@@ -1454,7 +1469,7 @@
           choice.onclick = () => {
             closeAddNewMenu();
             if (item.application_id === "team") openNewTeamModal();
-            else if (item.application_id === "flow") createFlow();
+            else if (item.application_id === "flow") openNewFlowModal();
             else openNewBoardModal();
           };
           menu.append(choice);
@@ -1510,6 +1525,28 @@
                   title,
                 }),
           "Team created",
+        );
+      });
+
+      el("cancelNewFlowBtn").onclick = () => el("newFlowModal").close();
+      el("newFlowForm").addEventListener("submit", (event) => {
+        event.preventDefault();
+        const title = el("newFlowName").value.trim() || "Untitled flow";
+        const select = el("newFlowTemplate");
+        const definitionId = select.value;
+        const definitionVersion = select.selectedOptions[0]?.dataset.version || "";
+        if (!definitionId || !definitionVersion) {
+          showToast("Choose a flow template", true);
+          return;
+        }
+        el("newFlowModal").close();
+        run(
+          (request) => request("/api/cockpit/flow/processes/create", {
+            title,
+            definition_id: definitionId,
+            definition_version: definitionVersion,
+          }),
+          "Flow created",
         );
       });
 

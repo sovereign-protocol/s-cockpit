@@ -245,6 +245,13 @@ def build_routes(logic, runtime) -> list[Route]:
             lambda: logic.delete_flow_process(data["process_uuid"]),
         )
 
+    async def api_leave_flow_process(request: Request):
+        data = await request.json()
+        return await _mutation_result(
+            runtime, data,
+            lambda: logic.leave_flow_process(data["process_uuid"]),
+        )
+
     async def api_create_flow_agenda(request: Request):
         data = await request.json()
         return await _mutation_result(
@@ -347,6 +354,8 @@ def build_routes(logic, runtime) -> list[Route]:
               api_create_flow_process, methods=["POST"]),
         Route("/api/cockpit/flow/processes/delete",
               api_delete_flow_process, methods=["POST"]),
+        Route("/api/cockpit/flow/processes/leave",
+              api_leave_flow_process, methods=["POST"]),
         Route("/api/cockpit/flow/agenda/create",
               api_create_flow_agenda, methods=["POST"]),
         Route("/api/cockpit/flow/agenda/delete",

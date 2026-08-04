@@ -138,6 +138,12 @@ class BoardOfBoardsLogic:
             summaries.append(summary)
         return summaries
 
+    def _flow_templates(self) -> list[dict]:
+        flow = self._flow()
+        if flow is None or not callable(getattr(flow, "templates", None)):
+            return []
+        return [dict(item) for item in flow.templates()]
+
     def _team_summaries(
         self, network_by_topic: dict[str, dict] | None = None,
     ) -> list[dict]:
@@ -462,6 +468,7 @@ class BoardOfBoardsLogic:
                 "boards": [],
                 "teams": teams,
                 "processes": processes,
+                "flow_templates": self._flow_templates(),
                 "tile_order": self._normalized_tile_order(
                     [], teams, processes,
                 ),
@@ -514,6 +521,7 @@ class BoardOfBoardsLogic:
             "boards": boards_out,
             "teams": teams,
             "processes": processes,
+            "flow_templates": self._flow_templates(),
             "tile_order": self._normalized_tile_order(
                 boards_out, teams, processes,
             ),
@@ -1261,6 +1269,15 @@ class BoardOfBoardsLogic:
         flow = self._flow()
         return (
             flow.delete_process(process_uuid)
+            if flow else SessionResult(
+                "error", reason="S-Flow application is not active",
+            )
+        )
+
+    def leave_flow_process(self, process_uuid: str) -> SessionResult:
+        flow = self._flow()
+        return (
+            flow.leave_process(process_uuid)
             if flow else SessionResult(
                 "error", reason="S-Flow application is not active",
             )

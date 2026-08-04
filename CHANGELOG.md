@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Creating a Flow now opens a modal for its name and one of S-Flow's bundled
+  templates. A Flow tile's settings let its creator delete its local copy or
+  an invitee leave it locally, after confirmation.
+- Reactions now use Core's shared control, replacing the Cockpit's copy of the
+  reaction menu, its markup and its stylesheet. A divergence with one available
+  act is a button naming it.
+- Divergences can be answered from the collaboration pane for a board; a team's
+  or a process's stay listed here and are answered in that application, which
+  is where the Cockpit has routes to honour them.
+
 ## 0.1.0a3 - 2026-08-01
 
 - Renamed from Personal Cockpit to **S-Cockpit**, distributed as

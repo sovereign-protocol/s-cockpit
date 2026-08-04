@@ -235,6 +235,16 @@ class AssetTests(unittest.TestCase):
         self.assertIn("/apps/initiative?board=", self.cockpit)
         self.assertIn("/apps/flow?process_uuid=", self.cockpit)
 
+    def test_flow_tiles_have_template_creation_and_owner_deletion_controls(self):
+        self.assertIn('id="newFlowModal"', self.cockpit)
+        self.assertIn('id="newFlowName"', self.cockpit)
+        self.assertIn('id="newFlowTemplate"', self.cockpit)
+        self.assertIn("state.flow_templates", self.cockpit)
+        self.assertIn("/api/cockpit/flow/processes/create", self.cockpit)
+        self.assertIn("/api/cockpit/flow/processes/delete", self.cockpit)
+        self.assertIn("/api/cockpit/flow/processes/leave", self.cockpit)
+        self.assertIn("process.can_delete", self.cockpit)
+
     def test_assets_do_not_call_producer_controller_namespaces(self):
         self.assertNotIn("/api/kanban", self.cockpit)
         self.assertNotIn("/api/team", self.cockpit)

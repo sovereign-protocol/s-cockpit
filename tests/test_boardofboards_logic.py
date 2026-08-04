@@ -201,6 +201,23 @@ class _StubFlowFacade:
             )
         return result
 
+    @staticmethod
+    def templates():
+        return [
+            {
+                "id": "integrative-election",
+                "version": "0.2.0",
+                "name": "Integrative Election",
+                "description": "Elect a candidate through nomination and consent.",
+            },
+            {
+                "id": "minimal-consent",
+                "version": "0.2.0",
+                "name": "Minimal Consent Decision",
+                "description": "Make a small decision by consent.",
+            },
+        ]
+
     def processes(self):
         nodes = [self.session.protocol.index.get(uuid) for uuid in self.uuids]
         return [node for node in nodes if node and not node.deleted]
@@ -219,6 +236,8 @@ class _StubFlowFacade:
             "assignment_count": 1,
             "agenda_count": len(self.session.agenda_items(process.uuid)),
             "content_hash": process.content_hash,
+            "can_delete": True,
+            "can_leave": False,
         }
 
     def collaboration_context(self, topic_uuid, network=None):
@@ -235,6 +254,9 @@ class _StubFlowFacade:
         }
 
     def delete_process(self, process_uuid):
+        return self.session.delete(process_uuid)
+
+    def leave_process(self, process_uuid):
         return self.session.delete(process_uuid)
 
     def create_agenda_item(self, process_uuid, text, priority=None):
@@ -880,12 +902,20 @@ class BoardOfBoardsLogicTests(unittest.TestCase):
             {"application_id": "flow", "label": "Flow"},
             payload["creatable"],
         )
+        self.assertEqual(
+            [item["id"] for item in payload["flow_templates"]],
+            ["integrative-election", "minimal-consent"],
+        )
         tile = payload["processes"][0]
         self.assertEqual(tile["title"], "Elect secretary")
         self.assertEqual(tile["current_stage"], "Configure participants")
         self.assertEqual(tile["required_from_me"], "Configure participants")
         self.assertEqual(tile["agenda_count"], 1)
         self.assertFalse(tile["expanded"])
+
+        deleted = bob.delete_flow_process(process_uuid)
+        self.assertEqual(deleted.status, "ok")
+        self.assertEqual(bob.summary_payload()["processes"], [])
 
     def test_enlarging_an_team_carries_its_whole_document(self):
         runtime = self.runtime(8525)
