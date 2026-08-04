@@ -1288,6 +1288,29 @@
           },
         );
       };
+      el("cancelFlowSettingsBtn").onclick = () => el("flowSettingsModal").close();
+      el("deleteFlowBtn").onclick = () => {
+        const process = settingsFlow;
+        if (!process) return;
+        const leaving = !process.can_delete;
+        confirmAction(
+          leaving ? "Leave this flow?" : "Delete this flow?",
+          leaving
+            ? "This removes the shared flow from your Cockpit. The creator keeps it."
+            : "This removes the flow, its workflow history and its agenda, and stops sharing it. This cannot be undone.",
+          () => {
+            el("flowSettingsModal").close();
+            return run(
+              (request) => request(leaving
+                ? "/api/cockpit/flow/processes/leave"
+                : "/api/cockpit/flow/processes/delete", {
+                process_uuid: process.uuid,
+              }),
+              leaving ? "Flow removed" : "Flow deleted",
+            );
+          },
+        );
+      };
       el("saveBoardSettingsBtn").onclick = () => {
         const board = settingsBoard;
         el("boardSettingsModal").close();
@@ -1729,6 +1752,28 @@
                 definition_id: definitionId,
                 definition_version: definitionVersion,
               }),
+          "Flow created",
+        );
+      });
+
+      el("cancelNewFlowBtn").onclick = () => el("newFlowModal").close();
+      el("newFlowForm").addEventListener("submit", (event) => {
+        event.preventDefault();
+        const title = el("newFlowName").value.trim() || "Untitled flow";
+        const select = el("newFlowTemplate");
+        const definitionId = select.value;
+        const definitionVersion = select.selectedOptions[0]?.dataset.version || "";
+        if (!definitionId || !definitionVersion) {
+          showToast("Choose a flow template", true);
+          return;
+        }
+        el("newFlowModal").close();
+        run(
+          (request) => request("/api/cockpit/flow/processes/create", {
+            title,
+            definition_id: definitionId,
+            definition_version: definitionVersion,
+          }),
           "Flow created",
         );
       });
