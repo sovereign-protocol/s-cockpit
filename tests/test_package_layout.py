@@ -277,6 +277,10 @@ class AssetTests(unittest.TestCase):
         self.assertNotIn("active_cards", status_source)
         self.assertNotIn("next_cards", status_source)
 
+    def test_topic_tiles_name_all_unsettled_items_as_transitions(self):
+        self.assertIn('statItem(count || 0, "in transition")', self.cockpit)
+        self.assertNotIn('? "divergence" : "divergences"', self.cockpit)
+
     def test_cockpit_uses_the_shared_optimistic_session_view(self):
         self.assertIn("/api/cockpit/tiles", self.cockpit)
         self.assertIn("/api/cockpit/context", self.cockpit)

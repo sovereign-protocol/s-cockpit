@@ -29,7 +29,7 @@ class _FacadeLookup:
     def find(self, application_id, facade_api_version):
         if application_id == "initiative" and facade_api_version == 1:
             return self.kanban
-        if application_id == "team" and facade_api_version == 1:
+        if application_id == "team" and facade_api_version == 2:
             return self.team
         if application_id == "flow" and facade_api_version == 1:
             return self.flow

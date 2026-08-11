@@ -486,7 +486,7 @@
         const status = document.createElement("div");
         status.className = "bob-board-status";
         status.append(
-          divergenceItem(team.unsettled_count),
+          transitionItem(team.unsettled_count),
           statItem(team.agenda_count, "agenda"),
         );
         return status;
@@ -758,7 +758,7 @@
         const status = document.createElement("div");
         status.className = "bob-board-status";
         status.append(
-          divergenceItem(board.discussion_count),
+          transitionItem(board.discussion_count),
           statItem(board.agenda_count, "agenda"),
         );
         return status;
@@ -771,10 +771,10 @@
         return item;
       }
 
-      // The count both topic kinds lead with, and the only one that is
-      // coloured - an unresolved difference is the thing worth noticing.
-      function divergenceItem(count) {
-        const item = statItem(count || 0, count === 1 ? "divergence" : "divergences");
+      // This includes incoming work and changes that are merely awaiting a
+      // peer, so it must not imply that every item is ours to resolve.
+      function transitionItem(count) {
+        const item = statItem(count || 0, "in transition");
         if (count > 0) item.classList.add("bob-stat-divergence");
         return item;
       }
