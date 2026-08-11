@@ -140,6 +140,14 @@ def build_routes(logic, runtime) -> list[Route]:
             lambda: logic.delete_kanban_agenda_item(data["item_uuid"]),
         )
 
+    async def api_update_kanban_agenda(request: Request):
+        data = await request.json()
+        return await _mutation_result(
+            runtime, data, lambda: logic.update_kanban_agenda_item(
+                data["item_uuid"], data.get("text", ""),
+            ),
+        )
+
     async def api_prioritize_kanban_agenda(request: Request):
         data = await request.json()
         return await _mutation_result(
@@ -213,6 +221,14 @@ def build_routes(logic, runtime) -> list[Route]:
             lambda: logic.delete_team_agenda_item(data["item_uuid"]),
         )
 
+    async def api_update_team_agenda(request: Request):
+        data = await request.json()
+        return await _mutation_result(
+            runtime, data, lambda: logic.update_team_agenda_item(
+                data["item_uuid"], data.get("text", ""),
+            ),
+        )
+
     async def api_prioritize_team_agenda(request: Request):
         data = await request.json()
         return await _mutation_result(
@@ -267,6 +283,14 @@ def build_routes(logic, runtime) -> list[Route]:
         return await _mutation_result(
             runtime, data,
             lambda: logic.delete_flow_agenda_item(data["item_uuid"]),
+        )
+
+    async def api_update_flow_agenda(request: Request):
+        data = await request.json()
+        return await _mutation_result(
+            runtime, data, lambda: logic.update_flow_agenda_item(
+                data["item_uuid"], data.get("text", ""),
+            ),
         )
 
     async def api_prioritize_flow_agenda(request: Request):
@@ -324,6 +348,8 @@ def build_routes(logic, runtime) -> list[Route]:
               api_create_kanban_agenda, methods=["POST"]),
         Route("/api/cockpit/kanban/agenda/delete",
               api_delete_kanban_agenda, methods=["POST"]),
+        Route("/api/cockpit/kanban/agenda/update",
+              api_update_kanban_agenda, methods=["POST"]),
         Route("/api/cockpit/kanban/agenda/set_priority",
               api_prioritize_kanban_agenda, methods=["POST"]),
         Route("/api/cockpit/kanban/agenda/move",
@@ -346,6 +372,8 @@ def build_routes(logic, runtime) -> list[Route]:
               api_create_team_agenda, methods=["POST"]),
         Route("/api/cockpit/team/agenda/delete",
               api_delete_team_agenda, methods=["POST"]),
+        Route("/api/cockpit/team/agenda/update",
+              api_update_team_agenda, methods=["POST"]),
         Route("/api/cockpit/team/agenda/set_priority",
               api_prioritize_team_agenda, methods=["POST"]),
         Route("/api/cockpit/team/agenda/move",
@@ -360,6 +388,8 @@ def build_routes(logic, runtime) -> list[Route]:
               api_create_flow_agenda, methods=["POST"]),
         Route("/api/cockpit/flow/agenda/delete",
               api_delete_flow_agenda, methods=["POST"]),
+        Route("/api/cockpit/flow/agenda/update",
+              api_update_flow_agenda, methods=["POST"]),
         Route("/api/cockpit/flow/agenda/set_priority",
               api_prioritize_flow_agenda, methods=["POST"]),
         Route("/api/cockpit/flow/agenda/move",

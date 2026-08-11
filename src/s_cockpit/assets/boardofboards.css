@@ -298,29 +298,13 @@ dialog.relay-target-dialog {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
-  border: 1px solid transparent;
-  border-radius: 6px;
   font-size: 0.85rem;
   color: #24292f;
   line-height: 1.15;
-  padding: 0.1rem 0.2rem;
-  cursor: text;
-  outline: none;
-}
-
-.bob-objective:empty::before {
-  content: "Set an objective...";
-  color: #8b949e;
-}
-
-.bob-objective:hover {
-  border-color: #d0d7de;
 }
 
 .bob-objective:focus {
   -webkit-line-clamp: unset;
-  border-color: var(--teal);
-  background: #f6f8fa;
 }
 
 .bob-stat {
@@ -623,16 +607,6 @@ body {
 .bob-card-people-empty {
   color: #c9d1d9;
 }
-.bob-objective:empty::before {
-  color: #6e7681;
-}
-.bob-objective:hover {
-  border-color: #30363d;
-}
-.bob-objective:focus {
-  border-color: var(--teal);
-  background: #0d1117;
-}
 .bob-board-tools {
   background: #0d1117;
   border-color: #30363d;
@@ -902,16 +876,6 @@ button,
 :root[data-theme="light"] .bob-band-sources,
 :root[data-theme="light"] .bob-card-people-empty {
   color: #44494f;
-}
-:root[data-theme="light"] .bob-objective:empty::before {
-  color: #8c959f;
-}
-:root[data-theme="light"] .bob-objective:hover {
-  border-color: #dfe1e6;
-}
-:root[data-theme="light"] .bob-objective:focus {
-  border-color: var(--teal);
-  background: #ffffff;
 }
 :root[data-theme="light"] .bob-board-tools {
   background: #f4f5f7;

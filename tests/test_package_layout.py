@@ -247,7 +247,8 @@ class AssetTests(unittest.TestCase):
 
     def test_root_team_creation_and_expansion_use_organization_wording(self):
         self.assertIn("<h2>New Organization</h2>", self.cockpit)
-        self.assertIn('value="Untitled organization"', self.cockpit)
+        self.assertIn('placeholder="Untitled organization"', self.cockpit)
+        self.assertNotIn('value="Untitled organization"', self.cockpit)
         self.assertIn('"Organization created"', self.cockpit)
         self.assertIn(
             'team.is_organization ? "Organization" : "Team"',
@@ -280,6 +281,20 @@ class AssetTests(unittest.TestCase):
     def test_topic_tiles_name_all_unsettled_items_as_transitions(self):
         self.assertIn('statItem(count || 0, "in transition")', self.cockpit)
         self.assertNotIn('? "divergence" : "divergences"', self.cockpit)
+
+    def test_objectives_and_agenda_text_use_the_shared_editor(self):
+        self.assertIn("SovereignUI.editableText", self.cockpit)
+        self.assertNotIn('div.contentEditable = "true"', self.cockpit)
+        for application in ("team", "kanban", "flow"):
+            self.assertIn(
+                f'update: "/api/cockpit/{application}/agenda/update"',
+                self.cockpit,
+            )
+
+    def test_creation_name_defaults_are_placeholders(self):
+        for default in ("Untitled initiative", "Untitled organization", "Untitled flow"):
+            self.assertIn(f'placeholder="{default}"', self.cockpit)
+            self.assertNotIn(f'value="{default}"', self.cockpit)
 
     def test_cockpit_uses_the_shared_optimistic_session_view(self):
         self.assertIn("/api/cockpit/tiles", self.cockpit)

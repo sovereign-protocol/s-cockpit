@@ -170,6 +170,9 @@ class _StubTeamFacade:
     def delete_agenda_item(self, item_uuid):
         return self.session.delete_agenda_item(item_uuid)
 
+    def update_agenda_item(self, item_uuid, text):
+        return self.session.update_agenda_item_text(item_uuid, text)
+
     def set_agenda_item_priority(self, item_uuid, priority):
         return self.session.set_agenda_item_priority(item_uuid, priority)
 
@@ -270,6 +273,9 @@ class _StubFlowFacade:
 
     def delete_agenda_item(self, item_uuid):
         return self.session.delete_agenda_item(item_uuid)
+
+    def update_agenda_item(self, item_uuid, text):
+        return self.session.update_agenda_item_text(item_uuid, text)
 
     def set_agenda_item_priority(self, item_uuid, priority):
         return self.session.set_agenda_item_priority(item_uuid, priority)
@@ -900,6 +906,36 @@ class BoardOfBoardsLogicTests(unittest.TestCase):
         self.assertEqual(
             [item.uuid for item in runtime.session.agenda_items(team_uuid)],
             [second.uuid, first.uuid],
+        )
+
+    def test_agenda_text_can_be_updated_through_application_facades(self):
+        runtime = self.runtime(8533)
+        team = _StubTeamFacade(runtime.session)
+        flow = _StubFlowFacade(runtime.session)
+        bob = cockpit(runtime, team, flow)
+        team_uuid = team.create("Working team")
+        team_item = team.create_agenda_item(team_uuid, "Team wording").value
+        process = bob.create_flow_process(
+            "Election", "integrative-election", "0.2.0",
+        ).value
+        flow_item = flow.create_agenda_item(process, "Flow wording").value
+
+        team_result = bob.update_team_agenda_item(
+            team_item.uuid, "Revised team wording",
+        )
+        flow_result = bob.update_flow_agenda_item(
+            flow_item.uuid, "Revised flow wording",
+        )
+
+        self.assertEqual(team_result.status, "ok")
+        self.assertEqual(flow_result.status, "ok")
+        self.assertEqual(
+            runtime.session.protocol.index[team_item.uuid].data["text"],
+            "Revised team wording",
+        )
+        self.assertEqual(
+            runtime.session.protocol.index[flow_item.uuid].data["text"],
+            "Revised flow wording",
         )
 
     def test_flow_process_is_a_selectable_tile_with_core_agenda(self):

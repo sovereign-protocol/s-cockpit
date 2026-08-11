@@ -80,7 +80,8 @@
     <dialog id="newBoardModal">
       <form method="dialog" id="newBoardForm">
         <h2>New Initiative</h2>
-        <label>Name<input id="newBoardName" value="Untitled initiative" /></label>
+        <label>Name<input id="newBoardName" class="ui-text-field"
+                          placeholder="Untitled initiative" /></label>
         <label>Copy from (optional)<select id="newBoardTemplate"></select></label>
         <menu>
           <button type="button" id="cancelNewBoardBtn">Cancel</button>
@@ -92,7 +93,8 @@
     <dialog id="newTeamModal">
       <form method="dialog" id="newTeamForm">
         <h2>New Organization</h2>
-        <label>Name<input id="newTeamName" value="Untitled organization" /></label>
+        <label>Name<input id="newTeamName" class="ui-text-field"
+                          placeholder="Untitled organization" /></label>
         <label>Copy from (optional)<select id="newTeamTemplate"></select></label>
         <menu>
           <button type="button" id="cancelNewTeamBtn">Cancel</button>
@@ -104,7 +106,8 @@
     <dialog id="newFlowModal">
       <form method="dialog" id="newFlowForm">
         <h2>New Flow</h2>
-        <label>Name<input id="newFlowName" value="Untitled flow" /></label>
+        <label>Name<input id="newFlowName" class="ui-text-field"
+                          placeholder="Untitled flow" /></label>
         <label>Template<select id="newFlowTemplate" required></select></label>
         <p id="newFlowTemplateDescription" class="bob-hint"></p>
         <menu>
@@ -732,24 +735,23 @@
         wrap.className = "bob-objective-wrap";
         const div = document.createElement("div");
         div.className = "bob-objective";
-        div.contentEditable = "true";
-        div.textContent = board.objective || "";
-        div.title = board.objective || "";
-        div.onkeydown = (event) => {
-          if (event.key === "Enter") event.preventDefault();
-        };
-        div.onblur = () => {
-          const value = div.textContent.trim();
-          div.title = value;
-          run(
+        SovereignUI.editableText({
+          element: div,
+          value: board.objective || "",
+          placeholder: "Set an objective...",
+          ariaLabel: "Initiative objective",
+          allowEmpty: true,
+          titleFromValue: true,
+          onCommit: (value) => run(
             (request) =>
               request("/api/cockpit/kanban/boards/set_objective", {
                 board_uuid: board.uuid,
                 objective: value,
               }),
             "Objective updated",
-          );
-        };
+          ),
+          onError: () => {},
+        });
         wrap.append(div);
         return wrap;
       }
@@ -1355,6 +1357,7 @@
               topicKey: "team_uuid",
               create: "/api/cockpit/team/agenda/create",
               delete: "/api/cockpit/team/agenda/delete",
+              update: "/api/cockpit/team/agenda/update",
               setPriority: "/api/cockpit/team/agenda/set_priority",
               move: "/api/cockpit/team/agenda/move",
             };
@@ -1364,6 +1367,7 @@
               topicKey: "board_uuid",
               create: "/api/cockpit/kanban/agenda/create",
               delete: "/api/cockpit/kanban/agenda/delete",
+              update: "/api/cockpit/kanban/agenda/update",
               setPriority: "/api/cockpit/kanban/agenda/set_priority",
               move: "/api/cockpit/kanban/agenda/move",
             };
@@ -1373,6 +1377,7 @@
               topicKey: "process_uuid",
               create: "/api/cockpit/flow/agenda/create",
               delete: "/api/cockpit/flow/agenda/delete",
+              update: "/api/cockpit/flow/agenda/update",
               setPriority: "/api/cockpit/flow/agenda/set_priority",
               move: "/api/cockpit/flow/agenda/move",
             };
@@ -1402,7 +1407,7 @@
       // template modal; a new team appears as a tile, and you stay here
       // to keep adding, exactly as creating a board leaves you here.
       function openNewBoardModal() {
-        el("newBoardName").value = "Untitled initiative";
+        el("newBoardName").value = "";
         const select = el("newBoardTemplate");
         select.replaceChildren();
         const empty = document.createElement("option");
@@ -1423,7 +1428,7 @@
       // A team copied this way arrives with the text and the roles and
       // nobody in it, which is what a template is.
       function openNewTeamModal() {
-        el("newTeamName").value = "Untitled organization";
+        el("newTeamName").value = "";
         const select = el("newTeamTemplate");
         select.replaceChildren();
         const empty = document.createElement("option");
@@ -1440,7 +1445,7 @@
       }
 
       function openNewFlowModal() {
-        el("newFlowName").value = "Untitled flow";
+        el("newFlowName").value = "";
         const select = el("newFlowTemplate");
         select.replaceChildren();
         for (const template of state.flow_templates || []) {
@@ -1494,7 +1499,7 @@
       el("cancelNewBoardBtn").onclick = () => el("newBoardModal").close();
       el("newBoardForm").addEventListener("submit", (event) => {
         event.preventDefault();
-        const name = el("newBoardName").value || "Kanban Board";
+        const name = el("newBoardName").value.trim() || "Untitled initiative";
         const templateUuid = el("newBoardTemplate").value;
         el("newBoardModal").close();
         run(async (request) => {
@@ -1520,7 +1525,7 @@
       el("cancelNewTeamBtn").onclick = () => el("newTeamModal").close();
       el("newTeamForm").addEventListener("submit", (event) => {
         event.preventDefault();
-        const title = el("newTeamName").value || "Untitled organization";
+        const title = el("newTeamName").value.trim() || "Untitled organization";
         const templateUuid = el("newTeamTemplate").value;
         el("newTeamModal").close();
         // One request either way: clone takes the title, so unlike a board

@@ -1135,6 +1135,15 @@ class BoardOfBoardsLogic:
             if kanban else SessionResult("error", reason=self._kanban_facade_error)
         )
 
+    def update_kanban_agenda_item(
+        self, item_uuid: str, text: str,
+    ) -> SessionResult:
+        kanban = self._kanban()
+        return (
+            kanban.update_agenda_item(item_uuid, text)
+            if kanban else SessionResult("error", reason=self._kanban_facade_error)
+        )
+
     def prioritize_kanban_agenda_item(
         self, item_uuid: str, priority: str | None,
     ) -> SessionResult:
@@ -1234,6 +1243,17 @@ class BoardOfBoardsLogic:
             )
         )
 
+    def update_team_agenda_item(
+        self, item_uuid: str, text: str,
+    ) -> SessionResult:
+        team = self._team()
+        return (
+            team.update_agenda_item(item_uuid, text)
+            if team else SessionResult(
+                "error", reason="Team application is not active",
+            )
+        )
+
     def prioritize_team_agenda_item(
         self, item_uuid: str, priority: str | None,
     ) -> SessionResult:
@@ -1305,6 +1325,17 @@ class BoardOfBoardsLogic:
         flow = self._flow()
         return (
             flow.delete_agenda_item(item_uuid)
+            if flow else SessionResult(
+                "error", reason="S-Flow application is not active",
+            )
+        )
+
+    def update_flow_agenda_item(
+        self, item_uuid: str, text: str,
+    ) -> SessionResult:
+        flow = self._flow()
+        return (
+            flow.update_agenda_item(item_uuid, text)
             if flow else SessionResult(
                 "error", reason="S-Flow application is not active",
             )
