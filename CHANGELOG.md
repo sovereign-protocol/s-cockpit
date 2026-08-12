@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Agenda counts and Collaboration panes now use Core's verified perspective
+  projection while mutations continue to target locally authored items only.
+
 - Root S-Team topics are presented as **Organizations** while nested topics
   remain Teams. The distinction comes from S-Team's facade projection; the
   Cockpit stores no second topic or Actor kind.

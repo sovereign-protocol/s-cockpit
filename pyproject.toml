@@ -20,7 +20,7 @@ classifiers = [
   "Operating System :: MacOS",
   "Operating System :: Microsoft :: Windows",
 ]
-dependencies = ["sovereign-protocol>=0.1.6,<0.2"]
+dependencies = ["sovereign-protocol>=0.1.9,<0.2"]
 
 # A package whose argument is auditability must say where its source is.
 [project.urls]
