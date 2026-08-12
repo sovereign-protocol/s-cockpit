@@ -83,9 +83,9 @@
         <label>Name<input id="newBoardName" class="ui-text-field"
                           placeholder="Untitled initiative" /></label>
         <label>Create from<select id="newBoardTemplate" class="ui-select"></select></label>
-        <button type="button" id="deleteBoardSnapshotBtn" class="danger snapshot-delete" hidden>
-          Delete saved snapshot
-        </button>
+        <button type="button" id="loadBoardSnapshotBtn">Load snapshot file...</button>
+        <input type="file" id="boardSnapshotFile" accept=".s-snapshot,application/json" hidden />
+        <p id="boardSnapshotFileStatus" class="bob-hint"></p>
         <menu>
           <button type="button" id="cancelNewBoardBtn">Cancel</button>
           <button type="submit" class="primary">Create</button>
@@ -99,9 +99,9 @@
         <label>Name<input id="newTeamName" class="ui-text-field"
                           placeholder="Untitled organization" /></label>
         <label>Create from<select id="newTeamTemplate" class="ui-select"></select></label>
-        <button type="button" id="deleteTeamSnapshotBtn" class="danger snapshot-delete" hidden>
-          Delete saved snapshot
-        </button>
+        <button type="button" id="loadTeamSnapshotBtn">Load snapshot file...</button>
+        <input type="file" id="teamSnapshotFile" accept=".s-snapshot,application/json" hidden />
+        <p id="teamSnapshotFileStatus" class="bob-hint"></p>
         <menu>
           <button type="button" id="cancelNewTeamBtn">Cancel</button>
           <button type="submit" class="primary">Create</button>
@@ -116,25 +116,12 @@
                           placeholder="Untitled flow" /></label>
         <label>Create from<select id="newFlowTemplate" class="ui-select" required></select></label>
         <p id="newFlowTemplateDescription" class="bob-hint"></p>
-        <button type="button" id="deleteFlowSnapshotBtn" class="danger snapshot-delete" hidden>
-          Delete saved snapshot
-        </button>
+        <button type="button" id="loadFlowSnapshotBtn">Load snapshot file...</button>
+        <input type="file" id="flowSnapshotFile" accept=".s-snapshot,application/json" hidden />
+        <p id="flowSnapshotFileStatus" class="bob-hint"></p>
         <menu>
           <button type="button" id="cancelNewFlowBtn">Cancel</button>
           <button type="submit" class="primary">Create</button>
-        </menu>
-      </form>
-    </dialog>
-
-    <dialog id="saveSnapshotModal">
-      <form method="dialog" id="saveSnapshotForm">
-        <h2>Save snapshot</h2>
-        <p id="saveSnapshotSource" class="bob-hint"></p>
-        <label>Name<input id="saveSnapshotName" class="ui-text-field" required /></label>
-        <label>Description<textarea id="saveSnapshotDescription" rows="3"></textarea></label>
-        <menu>
-          <button type="button" id="cancelSaveSnapshotBtn">Cancel</button>
-          <button type="submit" class="primary">Save snapshot</button>
         </menu>
       </form>
     </dialog>
@@ -163,7 +150,7 @@
       let settingsBoard = null;
       let settingsTeam = null;
       let settingsFlow = null;
-      let snapshotTarget = null;
+      const snapshotImports = {initiative: null, team: null, flow: null};
       const AUTO_ADOPT_LABELS = {
         always: "Always",
         not_owner: "Except cards I own",
@@ -1145,54 +1132,86 @@
         }).field;
       }
 
-      function openSaveSnapshot(applicationId, sourceUuid, title) {
+      function snapshotExportConfig(applicationId) {
         const config = {
           initiative: {
-            path: "/api/cockpit/kanban/snapshots/save",
+            path: "/api/cockpit/kanban/snapshots/export",
             key: "board_uuid",
           },
           team: {
-            path: "/api/cockpit/team/snapshots/save",
+            path: "/api/cockpit/team/snapshots/export",
             key: "team_uuid",
           },
           flow: {
-            path: "/api/cockpit/flow/snapshots/save",
+            path: "/api/cockpit/flow/snapshots/export",
             key: "process_uuid",
           },
         }[applicationId];
-        snapshotTarget = { ...config, sourceUuid };
-        el("saveSnapshotSource").textContent = `Save a reusable starting point from ${title}.`;
-        el("saveSnapshotName").value = `${title} snapshot`;
-        el("saveSnapshotDescription").value = "";
-        el("saveSnapshotModal").showModal();
-        el("saveSnapshotName").select();
+        return config;
       }
 
-      el("cancelSaveSnapshotBtn").onclick = () => el("saveSnapshotModal").close();
-      el("saveSnapshotForm").addEventListener("submit", (event) => {
-        event.preventDefault();
-        if (!snapshotTarget) return;
-        const target = snapshotTarget;
-        const name = el("saveSnapshotName").value.trim();
-        const description = el("saveSnapshotDescription").value.trim();
-        el("saveSnapshotModal").close();
-        snapshotTarget = null;
-        run(
-          (request) => request(target.path, {
-            [target.key]: target.sourceUuid,
+      function snapshotFilename(name) {
+        const stem = String(name || "snapshot")
+          .replace(/[^A-Za-z0-9._-]+/g, "-")
+          .replace(/^-+|-+$/g, "");
+        return `${stem || "snapshot"}.s-snapshot`;
+      }
+
+      async function writeSnapshotFile(snapshot, handle = null) {
+        const text = JSON.stringify(snapshot, null, 2);
+        if (handle) {
+          const writable = await handle.createWritable();
+          await writable.write(text);
+          await writable.close();
+          return;
+        }
+        const blob = new Blob([text], {type: "application/json"});
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = snapshotFilename(snapshot.name);
+        document.body.append(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 0);
+      }
+
+      async function saveSnapshotFile(applicationId, sourceUuid, title) {
+        const target = snapshotExportConfig(applicationId);
+        const name = `${title} snapshot`;
+        let handle = null;
+        if (window.showSaveFilePicker) {
+          try {
+            handle = await window.showSaveFilePicker({
+              suggestedName: snapshotFilename(name),
+            });
+          } catch (error) {
+            if (error.name === "AbortError") return;
+            showToast(error.message, true);
+            return;
+          }
+        } else {
+          showToast("Save-location selection is unavailable; downloading to your browser's download folder.");
+        }
+        try {
+          const result = await api(target.path, {
+            [target.key]: sourceUuid,
             name,
-            description,
-          }),
-          "Snapshot saved",
-        );
-      });
+            description: "",
+          });
+          await writeSnapshotFile(result.value, handle);
+          showToast(handle ? "Snapshot saved" : "Snapshot downloaded");
+        } catch (error) {
+          showToast(error.message, true);
+        }
+      }
 
       el("cancelBoardSettingsBtn").onclick = () => el("boardSettingsModal").close();
       el("saveBoardSnapshotBtn").onclick = () => {
         const board = settingsBoard;
         if (!board) return;
         el("boardSettingsModal").close();
-        openSaveSnapshot("initiative", board.uuid, board.name || "Untitled initiative");
+        saveSnapshotFile("initiative", board.uuid, board.name || "Untitled initiative");
       };
       el("deleteBoardSettingsBtn").onclick = () => {
         const board = settingsBoard;
@@ -1217,7 +1236,7 @@
         const team = settingsTeam;
         if (!team) return;
         el("agreementSettingsModal").close();
-        openSaveSnapshot("team", team.uuid, team.title || "Untitled organization");
+        saveSnapshotFile("team", team.uuid, team.title || "Untitled organization");
       };
       el("deleteTeamBtn").onclick = () => {
         const team = settingsTeam;
@@ -1245,7 +1264,7 @@
         const process = settingsFlow;
         if (!process) return;
         el("flowSettingsModal").close();
-        openSaveSnapshot("flow", process.uuid, process.title || "Untitled flow");
+        saveSnapshotFile("flow", process.uuid, process.title || "Untitled flow");
       };
       el("deleteFlowBtn").onclick = () => {
         const process = settingsFlow;
@@ -1476,49 +1495,65 @@
       // rather than creating anything itself. The board flow keeps its
       // template modal; a new team appears as a tile, and you stay here
       // to keep adding, exactly as creating a board leaves you here.
-      function appendSnapshotOptions(select, applicationId) {
-        const snapshots = state.item_snapshots?.[applicationId] || [];
-        if (!snapshots.length) return;
-        const group = document.createElement("optgroup");
-        group.label = "Saved snapshots";
-        for (const snapshot of snapshots) {
-          const option = document.createElement("option");
-          option.value = snapshot.uuid;
-          option.textContent = snapshot.name;
-          option.dataset.source = "snapshot";
-          option.dataset.description = snapshot.description || "";
-          group.append(option);
-        }
-        select.append(group);
+      function clearSnapshotImport(applicationId, select, file, status) {
+        snapshotImports[applicationId] = null;
+        file.value = "";
+        status.textContent = "";
+        select.disabled = false;
+        SovereignUI.refreshSelect(select);
       }
 
-      function updateSnapshotDeleteButton(select, button) {
-        button.hidden = select.selectedOptions[0]?.dataset.source !== "snapshot";
-      }
-
-      function deleteSelectedSnapshot(applicationId, select, button, onChanged) {
-        const option = select.selectedOptions[0];
-        if (!option || option.dataset.source !== "snapshot") return;
-        const paths = {
-          initiative: "/api/cockpit/kanban/snapshots/delete",
-          team: "/api/cockpit/team/snapshots/delete",
-          flow: "/api/cockpit/flow/snapshots/delete",
+      function bindSnapshotLoader(applicationId, buttonId, fileId, statusId, nameId, selectId) {
+        const button = el(buttonId);
+        const file = el(fileId);
+        const status = el(statusId);
+        const name = el(nameId);
+        const select = el(selectId);
+        button.onclick = () => {
+          file.value = "";
+          file.click();
         };
-        confirmAction(
-          "Delete this saved snapshot?",
-          `This permanently deletes "${option.textContent}". Existing items are unaffected.`,
-          () => run(
-            (request) => request(paths[applicationId], { snapshot_uuid: option.value }),
-            "Snapshot deleted",
-          ).then(() => {
-            option.remove();
-            select.selectedIndex = 0;
+        file.onchange = async () => {
+          const chosen = file.files?.[0];
+          if (!chosen) return;
+          try {
+            if (chosen.size > 50 * 1024 * 1024) {
+              throw new Error("Snapshot file is too large.");
+            }
+            const snapshot = JSON.parse(await chosen.text());
+            if (
+              snapshot?.format !== "s-protocol.item-snapshot" ||
+              snapshot?.format_version !== 1 ||
+              snapshot?.item_type !== applicationId ||
+              typeof snapshot?.content !== "object" ||
+              snapshot.content === null
+            ) {
+              throw new Error(`This file does not contain a compatible ${applicationId} snapshot.`);
+            }
+            snapshotImports[applicationId] = snapshot;
+            status.textContent = `Loaded: ${snapshot.name || chosen.name}`;
+            select.disabled = true;
+            if (!name.value.trim() && snapshot.source_name) name.value = snapshot.source_name;
             SovereignUI.refreshSelect(select);
-            updateSnapshotDeleteButton(select, button);
-            if (onChanged) onChanged();
-          }),
-        );
+          } catch (error) {
+            clearSnapshotImport(applicationId, select, file, status);
+            showToast(error instanceof SyntaxError ? "Snapshot file is not valid JSON" : error.message, true);
+          }
+        };
       }
+
+      bindSnapshotLoader(
+        "initiative", "loadBoardSnapshotBtn", "boardSnapshotFile",
+        "boardSnapshotFileStatus", "newBoardName", "newBoardTemplate",
+      );
+      bindSnapshotLoader(
+        "team", "loadTeamSnapshotBtn", "teamSnapshotFile",
+        "teamSnapshotFileStatus", "newTeamName", "newTeamTemplate",
+      );
+      bindSnapshotLoader(
+        "flow", "loadFlowSnapshotBtn", "flowSnapshotFile",
+        "flowSnapshotFileStatus", "newFlowName", "newFlowTemplate",
+      );
 
       function openNewBoardModal() {
         el("newBoardName").value = "";
@@ -1534,12 +1569,9 @@
           {emptyLabel: "Start empty", value: ""},
         );
         select.options[0].dataset.source = "blank";
-        appendSnapshotOptions(select, "initiative");
-        const remove = el("deleteBoardSnapshotBtn");
-        const update = () => updateSnapshotDeleteButton(select, remove);
-        select.onchange = update;
-        remove.onclick = () => deleteSelectedSnapshot("initiative", select, remove);
-        update();
+        clearSnapshotImport(
+          "initiative", select, el("boardSnapshotFile"), el("boardSnapshotFileStatus"),
+        );
         el("newBoardModal").showModal();
       }
 
@@ -1561,12 +1593,9 @@
           {emptyLabel: "Start empty", value: ""},
         );
         select.options[0].dataset.source = "blank";
-        appendSnapshotOptions(select, "team");
-        const remove = el("deleteTeamSnapshotBtn");
-        const update = () => updateSnapshotDeleteButton(select, remove);
-        select.onchange = update;
-        remove.onclick = () => deleteSelectedSnapshot("team", select, remove);
-        update();
+        clearSnapshotImport(
+          "team", select, el("teamSnapshotFile"), el("teamSnapshotFileStatus"),
+        );
         el("newTeamModal").showModal();
       }
 
@@ -1587,16 +1616,13 @@
           })),
           {value: state.flow_templates?.[0]?.id || ""},
         );
-        appendSnapshotOptions(select, "flow");
-        const remove = el("deleteFlowSnapshotBtn");
         const updateDescription = () => {
           const option = select.selectedOptions[0];
           el("newFlowTemplateDescription").textContent = option?.dataset.description || "";
-          updateSnapshotDeleteButton(select, remove);
         };
         select.onchange = updateDescription;
-        remove.onclick = () => deleteSelectedSnapshot(
-          "flow", select, remove, updateDescription,
+        clearSnapshotImport(
+          "flow", select, el("flowSnapshotFile"), el("flowSnapshotFileStatus"),
         );
         updateDescription();
         el("newFlowModal").showModal();
@@ -1622,12 +1648,12 @@
         const name = el("newBoardName").value.trim() || "Untitled initiative";
         const select = el("newBoardTemplate");
         const templateUuid = select.value;
-        const source = select.selectedOptions[0]?.dataset.source;
+        const snapshot = snapshotImports.initiative;
         el("newBoardModal").close();
         run(async (request) => {
-          if (source === "snapshot") {
+          if (snapshot) {
             return request("/api/cockpit/kanban/snapshots/create", {
-              snapshot_uuid: templateUuid,
+              snapshot,
               name,
             });
           }
@@ -1656,15 +1682,15 @@
         const title = el("newTeamName").value.trim() || "Untitled organization";
         const select = el("newTeamTemplate");
         const templateUuid = select.value;
-        const source = select.selectedOptions[0]?.dataset.source;
+        const snapshot = snapshotImports.team;
         el("newTeamModal").close();
         // One request either way: clone takes the title, so unlike a board
         // copy there is nothing to rename afterwards.
         run(
           (request) =>
-            source === "snapshot"
+            snapshot
               ? request("/api/cockpit/team/snapshots/create", {
-                  snapshot_uuid: templateUuid,
+                  snapshot,
                   title,
                 })
               : templateUuid
@@ -1685,17 +1711,17 @@
         const title = el("newFlowName").value.trim() || "Untitled flow";
         const select = el("newFlowTemplate");
         const definitionId = select.value;
-        const source = select.selectedOptions[0]?.dataset.source;
+        const snapshot = snapshotImports.flow;
         const definitionVersion = select.selectedOptions[0]?.dataset.version || "";
-        if (!definitionId || (source !== "snapshot" && !definitionVersion)) {
-          showToast("Choose a flow template or saved snapshot", true);
+        if (!snapshot && (!definitionId || !definitionVersion)) {
+          showToast("Choose a flow template or load a snapshot file", true);
           return;
         }
         el("newFlowModal").close();
         run(
-          (request) => source === "snapshot"
+          (request) => snapshot
             ? request("/api/cockpit/flow/snapshots/create", {
-                snapshot_uuid: definitionId,
+                snapshot,
                 title,
               })
             : request("/api/cockpit/flow/processes/create", {

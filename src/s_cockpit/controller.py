@@ -186,23 +186,17 @@ def build_routes(logic, runtime) -> list[Route]:
             data["board_uuid"], data.get("name", "Kanban Board"),
         ))
 
-    async def api_save_board_snapshot(request: Request):
+    async def api_export_board_snapshot(request: Request):
         data = await request.json()
-        return await _mutation_result(runtime, data, lambda: logic.save_board_snapshot(
+        return _query_result(logic.export_board_snapshot(
             data["board_uuid"], data.get("name", ""), data.get("description", ""),
         ))
 
     async def api_create_board_from_snapshot(request: Request):
         data = await request.json()
         return await _mutation_result(runtime, data, lambda: logic.create_board_from_snapshot(
-            data["snapshot_uuid"], data.get("name", ""),
+            data.get("snapshot"), data.get("name", ""),
         ))
-
-    async def api_delete_board_snapshot(request: Request):
-        data = await request.json()
-        return await _mutation_result(
-            runtime, data, lambda: logic.delete_board_snapshot(data["snapshot_uuid"]),
-        )
 
     async def api_create_team(request: Request):
         data = await request.json()
@@ -225,23 +219,17 @@ def build_routes(logic, runtime) -> list[Route]:
             runtime, data, lambda: logic.delete_team(data["team_uuid"]),
         )
 
-    async def api_save_team_snapshot(request: Request):
+    async def api_export_team_snapshot(request: Request):
         data = await request.json()
-        return await _mutation_result(runtime, data, lambda: logic.save_team_snapshot(
+        return _query_result(logic.export_team_snapshot(
             data["team_uuid"], data.get("name", ""), data.get("description", ""),
         ))
 
     async def api_create_team_from_snapshot(request: Request):
         data = await request.json()
         return await _mutation_result(runtime, data, lambda: logic.create_team_from_snapshot(
-            data["snapshot_uuid"], data.get("title", ""),
+            data.get("snapshot"), data.get("title", ""),
         ))
-
-    async def api_delete_team_snapshot(request: Request):
-        data = await request.json()
-        return await _mutation_result(
-            runtime, data, lambda: logic.delete_team_snapshot(data["snapshot_uuid"]),
-        )
 
     async def api_create_team_agenda(request: Request):
         data = await request.json()
@@ -304,23 +292,17 @@ def build_routes(logic, runtime) -> list[Route]:
             lambda: logic.leave_flow_process(data["process_uuid"]),
         )
 
-    async def api_save_flow_snapshot(request: Request):
+    async def api_export_flow_snapshot(request: Request):
         data = await request.json()
-        return await _mutation_result(runtime, data, lambda: logic.save_flow_snapshot(
+        return _query_result(logic.export_flow_snapshot(
             data["process_uuid"], data.get("name", ""), data.get("description", ""),
         ))
 
     async def api_create_flow_from_snapshot(request: Request):
         data = await request.json()
         return await _mutation_result(runtime, data, lambda: logic.create_flow_from_snapshot(
-            data["snapshot_uuid"], data.get("title", ""),
+            data.get("snapshot"), data.get("title", ""),
         ))
-
-    async def api_delete_flow_snapshot(request: Request):
-        data = await request.json()
-        return await _mutation_result(
-            runtime, data, lambda: logic.delete_flow_snapshot(data["snapshot_uuid"]),
-        )
 
     async def api_create_flow_agenda(request: Request):
         data = await request.json()
@@ -416,11 +398,9 @@ def build_routes(logic, runtime) -> list[Route]:
               methods=["POST"]),
         Route("/api/cockpit/kanban/boards/rename", api_rename_board,
               methods=["POST"]),
-        Route("/api/cockpit/kanban/snapshots/save", api_save_board_snapshot,
+        Route("/api/cockpit/kanban/snapshots/export", api_export_board_snapshot,
               methods=["POST"]),
         Route("/api/cockpit/kanban/snapshots/create", api_create_board_from_snapshot,
-              methods=["POST"]),
-        Route("/api/cockpit/kanban/snapshots/delete", api_delete_board_snapshot,
               methods=["POST"]),
         Route("/api/cockpit/team/teams/create",
               api_create_team, methods=["POST"]),
@@ -428,11 +408,9 @@ def build_routes(logic, runtime) -> list[Route]:
               api_clone_team, methods=["POST"]),
         Route("/api/cockpit/team/teams/delete",
               api_delete_team, methods=["POST"]),
-        Route("/api/cockpit/team/snapshots/save", api_save_team_snapshot,
+        Route("/api/cockpit/team/snapshots/export", api_export_team_snapshot,
               methods=["POST"]),
         Route("/api/cockpit/team/snapshots/create", api_create_team_from_snapshot,
-              methods=["POST"]),
-        Route("/api/cockpit/team/snapshots/delete", api_delete_team_snapshot,
               methods=["POST"]),
         Route("/api/cockpit/team/agenda/create",
               api_create_team_agenda, methods=["POST"]),
@@ -450,11 +428,9 @@ def build_routes(logic, runtime) -> list[Route]:
               api_delete_flow_process, methods=["POST"]),
         Route("/api/cockpit/flow/processes/leave",
               api_leave_flow_process, methods=["POST"]),
-        Route("/api/cockpit/flow/snapshots/save", api_save_flow_snapshot,
+        Route("/api/cockpit/flow/snapshots/export", api_export_flow_snapshot,
               methods=["POST"]),
         Route("/api/cockpit/flow/snapshots/create", api_create_flow_from_snapshot,
-              methods=["POST"]),
-        Route("/api/cockpit/flow/snapshots/delete", api_delete_flow_snapshot,
               methods=["POST"]),
         Route("/api/cockpit/flow/agenda/create",
               api_create_flow_agenda, methods=["POST"]),
@@ -489,3 +465,15 @@ def _composite_response(runtime, logic, snapshot_builder):
         observe,
         logic.merge_observations,
     )
+
+
+def _query_result(result) -> JSONResponse:
+    if result.status != "ok":
+        return JSONResponse(
+            {"status": "error", "reason": str(result.reason or "unknown error")},
+            status_code=409,
+        )
+    payload = {"status": "ok"}
+    if result.value is not None:
+        payload["value"] = result.value
+    return JSONResponse(payload)

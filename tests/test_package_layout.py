@@ -255,15 +255,23 @@ class AssetTests(unittest.TestCase):
         self.assertIn("/api/cockpit/flow/processes/leave", self.cockpit)
         self.assertIn("process.can_delete", self.cockpit)
 
-    def test_all_item_types_offer_saved_snapshot_lifecycle(self):
-        self.assertIn('id="saveSnapshotModal"', self.cockpit)
-        self.assertIn("state.item_snapshots", self.cockpit)
+    def test_all_item_types_offer_portable_snapshot_files(self):
+        self.assertNotIn('id="saveSnapshotModal"', self.cockpit)
+        self.assertIn("saveSnapshotFile", self.cockpit)
+        self.assertIn(".s-snapshot", self.cockpit)
+        self.assertIn("showSaveFilePicker", self.cockpit)
+        self.assertNotIn('accept: {"application/json": [".s-snapshot"]}', self.cockpit)
+        self.assertIn("Load snapshot file...", self.cockpit)
         for application in ("kanban", "team", "flow"):
-            for action in ("save", "create", "delete"):
+            for action in ("export", "create"):
                 self.assertIn(
                     f"/api/cockpit/{application}/snapshots/{action}",
                     self.cockpit,
                 )
+            self.assertNotIn(
+                f"/api/cockpit/{application}/snapshots/delete",
+                self.cockpit,
+            )
 
     def test_root_team_creation_and_expansion_use_organization_wording(self):
         self.assertIn("<h2>New Organization</h2>", self.cockpit)

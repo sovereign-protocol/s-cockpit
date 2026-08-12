@@ -60,7 +60,6 @@ TEAM_APPLICATION_ID = "team"
 TEAM_FACADE_API_VERSION = 2
 FLOW_APPLICATION_ID = "flow"
 FLOW_FACADE_API_VERSION = 1
-DEFAULT_AGENDA_PERSPECTIVE_MAX_AGE_SECONDS = 2 * 60 * 60
 
 
 class FacadeLookup(Protocol):
@@ -144,18 +143,6 @@ class BoardOfBoardsLogic:
         if flow is None or not callable(getattr(flow, "templates", None)):
             return []
         return [dict(item) for item in flow.templates()]
-
-    @staticmethod
-    def _facade_snapshots(facade) -> list[dict]:
-        snapshots = getattr(facade, "snapshots", None) if facade else None
-        return [dict(item) for item in snapshots()] if callable(snapshots) else []
-
-    def _item_snapshots(self) -> dict[str, list[dict]]:
-        return {
-            INITIATIVE_APPLICATION_ID: self._facade_snapshots(self._kanban()),
-            TEAM_APPLICATION_ID: self._facade_snapshots(self._team()),
-            FLOW_APPLICATION_ID: self._facade_snapshots(self._flow()),
-        }
 
     def _team_summaries(
         self, network_by_topic: dict[str, dict] | None = None,
@@ -456,17 +443,7 @@ class BoardOfBoardsLogic:
         )
 
     def _agenda_items(self, topic_uuid: str):
-        configured = self.config.get(
-            "agenda_perspective_max_age_seconds",
-            DEFAULT_AGENDA_PERSPECTIVE_MAX_AGE_SECONDS,
-        )
-        return self.session.agenda_projection(
-            topic_uuid,
-            max_age_seconds=(
-                None if configured is None else float(configured)
-            ),
-            not_before=self.config.get("agenda_perspective_not_before"),
-        )
+        return self.session.agenda_projection(topic_uuid)
 
     @_session_transaction
     def tiles_payload(
@@ -502,7 +479,6 @@ class BoardOfBoardsLogic:
                 "teams": teams,
                 "processes": processes,
                 "flow_templates": self._flow_templates(),
-                "item_snapshots": self._item_snapshots(),
                 "tile_order": self._normalized_tile_order(
                     [], teams, processes,
                 ),
@@ -556,7 +532,6 @@ class BoardOfBoardsLogic:
             "teams": teams,
             "processes": processes,
             "flow_templates": self._flow_templates(),
-            "item_snapshots": self._item_snapshots(),
             "tile_order": self._normalized_tile_order(
                 boards_out, teams, processes,
             ),
@@ -1213,32 +1188,24 @@ class BoardOfBoardsLogic:
             if kanban else SessionResult("error", reason=self._kanban_facade_error)
         )
 
-    def save_board_snapshot(
+    def export_board_snapshot(
         self, board_uuid: str, name: str = "", description: str = "",
     ) -> SessionResult:
         kanban = self._kanban()
-        save = getattr(kanban, "save_snapshot", None) if kanban else None
+        export = getattr(kanban, "export_snapshot", None) if kanban else None
         return (
-            save(board_uuid, name, description)
-            if callable(save) else SessionResult("error", reason="Snapshots are not supported")
+            export(board_uuid, name, description)
+            if callable(export) else SessionResult("error", reason="Snapshots are not supported")
         )
 
     def create_board_from_snapshot(
-        self, snapshot_uuid: str, name: str = "",
+        self, document: dict, name: str = "",
     ) -> SessionResult:
         kanban = self._kanban()
         create = getattr(kanban, "create_from_snapshot", None) if kanban else None
         return (
-            create(snapshot_uuid, name)
+            create(document, name)
             if callable(create) else SessionResult("error", reason="Snapshots are not supported")
-        )
-
-    def delete_board_snapshot(self, snapshot_uuid: str) -> SessionResult:
-        kanban = self._kanban()
-        delete = getattr(kanban, "delete_snapshot", None) if kanban else None
-        return (
-            delete(snapshot_uuid)
-            if callable(delete) else SessionResult("error", reason="Snapshots are not supported")
         )
 
     def rename_board(self, board_uuid: str, name: str) -> SessionResult:
@@ -1269,32 +1236,24 @@ class BoardOfBoardsLogic:
             )
         )
 
-    def save_team_snapshot(
+    def export_team_snapshot(
         self, team_uuid: str, name: str = "", description: str = "",
     ) -> SessionResult:
         team = self._team()
-        save = getattr(team, "save_snapshot", None) if team else None
+        export = getattr(team, "export_snapshot", None) if team else None
         return (
-            save(team_uuid, name, description)
-            if callable(save) else SessionResult("error", reason="Snapshots are not supported")
+            export(team_uuid, name, description)
+            if callable(export) else SessionResult("error", reason="Snapshots are not supported")
         )
 
     def create_team_from_snapshot(
-        self, snapshot_uuid: str, title: str = "",
+        self, document: dict, title: str = "",
     ) -> SessionResult:
         team = self._team()
         create = getattr(team, "create_from_snapshot", None) if team else None
         return (
-            create(snapshot_uuid, title)
+            create(document, title)
             if callable(create) else SessionResult("error", reason="Snapshots are not supported")
-        )
-
-    def delete_team_snapshot(self, snapshot_uuid: str) -> SessionResult:
-        team = self._team()
-        delete = getattr(team, "delete_snapshot", None) if team else None
-        return (
-            delete(snapshot_uuid)
-            if callable(delete) else SessionResult("error", reason="Snapshots are not supported")
         )
 
     def delete_team(self, team_uuid: str) -> SessionResult:
@@ -1376,32 +1335,24 @@ class BoardOfBoardsLogic:
             )
         )
 
-    def save_flow_snapshot(
+    def export_flow_snapshot(
         self, process_uuid: str, name: str = "", description: str = "",
     ) -> SessionResult:
         flow = self._flow()
-        save = getattr(flow, "save_snapshot", None) if flow else None
+        export = getattr(flow, "export_snapshot", None) if flow else None
         return (
-            save(process_uuid, name, description)
-            if callable(save) else SessionResult("error", reason="Snapshots are not supported")
+            export(process_uuid, name, description)
+            if callable(export) else SessionResult("error", reason="Snapshots are not supported")
         )
 
     def create_flow_from_snapshot(
-        self, snapshot_uuid: str, title: str = "",
+        self, document: dict, title: str = "",
     ) -> SessionResult:
         flow = self._flow()
         create = getattr(flow, "create_from_snapshot", None) if flow else None
         return (
-            create(snapshot_uuid, title)
+            create(document, title)
             if callable(create) else SessionResult("error", reason="Snapshots are not supported")
-        )
-
-    def delete_flow_snapshot(self, snapshot_uuid: str) -> SessionResult:
-        flow = self._flow()
-        delete = getattr(flow, "delete_snapshot", None) if flow else None
-        return (
-            delete(snapshot_uuid)
-            if callable(delete) else SessionResult("error", reason="Snapshots are not supported")
         )
 
     def delete_flow_process(self, process_uuid: str) -> SessionResult:

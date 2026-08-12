@@ -4,6 +4,8 @@
 
 - Agenda counts and Collaboration panes now use Core's verified perspective
   projection while mutations continue to target locally authored items only.
+  The staleness window is Core's default rather than a Cockpit declaration;
+  the unused `agenda_perspective_*` configuration keys are gone.
 
 - Root S-Team topics are presented as **Organizations** while nested topics
   remain Teams. The distinction comes from S-Team's facade projection; the
