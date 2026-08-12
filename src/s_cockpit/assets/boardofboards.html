@@ -14,10 +14,7 @@
     <header class="bob-topbar"><div id="shell"></div></header>
 
     <template id="cockpitHeaderControls">
-      <div class="bob-add-new">
-        <button id="addNewBtn" class="ui-button" aria-haspopup="true">+ Add new…</button>
-        <div id="addNewMenu" class="bob-add-menu" hidden></div>
-      </div>
+      <button id="addNewBtn" class="ui-button">+ Add new…</button>
     </template>
 
     <main id="boards" class="bob-boards"></main>
@@ -29,7 +26,7 @@
         <p id="cardPerspectiveMeta" class="perspective-meta"></p>
         <label>Name<input id="cardName" /></label>
         <label>Description<textarea id="cardDescription" rows="4"></textarea></label>
-        <label>Owner<select id="cardOwner"></select></label>
+        <label>Owner<select id="cardOwner" class="ui-select"></select></label>
         <label>Members</label>
         <div id="participantPicker" class="user-picker"></div>
         <menu>
@@ -85,7 +82,7 @@
         <h2>New Initiative</h2>
         <label>Name<input id="newBoardName" class="ui-text-field"
                           placeholder="Untitled initiative" /></label>
-        <label>Create from<select id="newBoardTemplate"></select></label>
+        <label>Create from<select id="newBoardTemplate" class="ui-select"></select></label>
         <button type="button" id="deleteBoardSnapshotBtn" class="danger snapshot-delete" hidden>
           Delete saved snapshot
         </button>
@@ -101,7 +98,7 @@
         <h2>New Organization</h2>
         <label>Name<input id="newTeamName" class="ui-text-field"
                           placeholder="Untitled organization" /></label>
-        <label>Create from<select id="newTeamTemplate"></select></label>
+        <label>Create from<select id="newTeamTemplate" class="ui-select"></select></label>
         <button type="button" id="deleteTeamSnapshotBtn" class="danger snapshot-delete" hidden>
           Delete saved snapshot
         </button>
@@ -117,7 +114,7 @@
         <h2>New Flow</h2>
         <label>Name<input id="newFlowName" class="ui-text-field"
                           placeholder="Untitled flow" /></label>
-        <label>Create from<select id="newFlowTemplate" required></select></label>
+        <label>Create from<select id="newFlowTemplate" class="ui-select" required></select></label>
         <p id="newFlowTemplateDescription" class="bob-hint"></p>
         <button type="button" id="deleteFlowSnapshotBtn" class="danger snapshot-delete" hidden>
           Delete saved snapshot
@@ -866,42 +863,37 @@
         row.append(cardDiscussionTools(card));
         row.append(cardPeople(card));
 
-        const select = document.createElement("select");
-        select.className = "bob-status-select";
-        for (const column of board.columns) {
-          const opt = document.createElement("option");
-          opt.value = column.uuid;
-          opt.textContent = column.name;
-          select.append(opt);
-        }
+        const statusOptions = board.columns.map((column) => [column.uuid, column.name]);
         if (band === "Active") {
-          const opt = document.createElement("option");
-          opt.value = "__selected__";
-          opt.textContent = "Selected";
-          select.append(opt);
+          statusOptions.push(["__selected__", "Selected"]);
         }
-        select.value = card.column_uuid;
-        select.onchange = () => {
-          const value = select.value;
-          if (value === "__selected__") {
+        const {control} = SovereignUI.selectionControl({
+          items: statusOptions,
+          value: card.column_uuid,
+          variant: "compact",
+          controlClass: "bob-status-control",
+          onChange: ({currentTarget: select}) => {
+            const value = select.value;
+            if (value === "__selected__") {
+              run(
+                (request) =>
+                  request("/api/cockpit/cards/toggle_selected", { card_uuid: card.uuid }),
+                "Updated",
+              );
+              return;
+            }
             run(
               (request) =>
-                request("/api/cockpit/cards/toggle_selected", { card_uuid: card.uuid }),
-              "Updated",
+                request("/api/cockpit/kanban/cards/move", {
+                  card_uuid: card.uuid,
+                  column_uuid: value,
+                  index: 0,
+                }),
+              "Moved",
             );
-            return;
-          }
-          run(
-            (request) =>
-              request("/api/cockpit/kanban/cards/move", {
-                card_uuid: card.uuid,
-                column_uuid: value,
-                index: 0,
-              }),
-            "Moved",
-          );
-        };
-        row.append(select);
+          },
+        });
+        row.append(control);
         return row;
       }
 
@@ -1058,20 +1050,16 @@
 
       function renderOwnerSelect() {
         const select = el("cardOwner");
-        select.replaceChildren();
-        const blank = document.createElement("option");
-        blank.value = "";
-        blank.textContent = "Unassigned";
-        select.append(blank);
-        for (const id of modalParticipants) {
-          const option = document.createElement("option");
-          option.value = id;
-          option.textContent = personFor(id).name;
-          select.append(option);
-        }
-        select.value = modalParticipants.includes(modalOwner) ? modalOwner : "";
+        SovereignUI.selectOptions(
+          select,
+          modalParticipants.map((id) => [id, personFor(id).name]),
+          {
+            emptyLabel: "Unassigned",
+            value: modalParticipants.includes(modalOwner) ? modalOwner : "",
+            disabled: modalReadOnlyPerspective,
+          },
+        );
         modalOwner = select.value || null;
-        select.disabled = modalReadOnlyPerspective;
       }
 
       function setExpanded(board, expanded) {
@@ -1112,10 +1100,16 @@
         const active = el("settingsActiveColumn");
         const next = el("settingsNextColumn");
         active.onchange = () => {
-          if (active.value && active.value === next.value) next.value = "";
+          if (active.value && active.value === next.value) {
+            next.value = "";
+            SovereignUI.refreshSelect(next);
+          }
         };
         next.onchange = () => {
-          if (next.value && next.value === active.value) active.value = "";
+          if (next.value && next.value === active.value) {
+            active.value = "";
+            SovereignUI.refreshSelect(active);
+          }
         };
         el("boardSettingsModal").showModal();
       }
@@ -1142,23 +1136,13 @@
       }
 
       function selectField(id, text, columns, value) {
-        const label = document.createElement("label");
-        label.textContent = text;
-        const select = document.createElement("select");
-        select.id = id;
-        const empty = document.createElement("option");
-        empty.value = "";
-        empty.textContent = "None";
-        select.append(empty);
-        for (const column of columns) {
-          const option = document.createElement("option");
-          option.value = column.uuid;
-          option.textContent = column.name;
-          select.append(option);
-        }
-        select.value = value;
-        label.append(select);
-        return label;
+        return SovereignUI.selectionField({
+          id,
+          label: text,
+          items: columns.map((column) => [column.uuid, column.name]),
+          emptyLabel: "None",
+          value,
+        }).field;
       }
 
       function openSaveSnapshot(applicationId, sourceUuid, title) {
@@ -1429,7 +1413,7 @@
         );
       });
 
-      const addNew = el("cockpitHeaderControls").content.querySelector(".bob-add-new");
+      const addNew = el("cockpitHeaderControls").content.querySelector("#addNewBtn");
 
       SovereignShell.mount({
         container: el("shell"),
@@ -1529,6 +1513,7 @@
           ).then(() => {
             option.remove();
             select.selectedIndex = 0;
+            SovereignUI.refreshSelect(select);
             updateSnapshotDeleteButton(select, button);
             if (onChanged) onChanged();
           }),
@@ -1538,22 +1523,17 @@
       function openNewBoardModal() {
         el("newBoardName").value = "";
         const select = el("newBoardTemplate");
-        select.replaceChildren();
-        const empty = document.createElement("option");
-        empty.value = "";
-        empty.textContent = "Start empty";
-        empty.dataset.source = "blank";
-        select.append(empty);
-        const current = document.createElement("optgroup");
-        current.label = "Current initiatives";
-        for (const board of state.boards || []) {
-          const opt = document.createElement("option");
-          opt.value = board.uuid;
-          opt.textContent = board.name;
-          opt.dataset.source = "current";
-          current.append(opt);
-        }
-        if (current.children.length) select.append(current);
+        SovereignUI.selectOptions(
+          select,
+          (state.boards || []).map((board) => ({
+            value: board.uuid,
+            label: board.name,
+            group: "Current initiatives",
+            dataset: {source: "current"},
+          })),
+          {emptyLabel: "Start empty", value: ""},
+        );
+        select.options[0].dataset.source = "blank";
         appendSnapshotOptions(select, "initiative");
         const remove = el("deleteBoardSnapshotBtn");
         const update = () => updateSnapshotDeleteButton(select, remove);
@@ -1570,22 +1550,17 @@
       function openNewTeamModal() {
         el("newTeamName").value = "";
         const select = el("newTeamTemplate");
-        select.replaceChildren();
-        const empty = document.createElement("option");
-        empty.value = "";
-        empty.textContent = "Start empty";
-        empty.dataset.source = "blank";
-        select.append(empty);
-        const current = document.createElement("optgroup");
-        current.label = "Current organizations";
-        for (const team of state.teams || []) {
-          const opt = document.createElement("option");
-          opt.value = team.uuid;
-          opt.textContent = team.title || "Untitled team";
-          opt.dataset.source = "current";
-          current.append(opt);
-        }
-        if (current.children.length) select.append(current);
+        SovereignUI.selectOptions(
+          select,
+          (state.teams || []).map((team) => ({
+            value: team.uuid,
+            label: team.title || "Untitled team",
+            group: "Current organizations",
+            dataset: {source: "current"},
+          })),
+          {emptyLabel: "Start empty", value: ""},
+        );
+        select.options[0].dataset.source = "blank";
         appendSnapshotOptions(select, "team");
         const remove = el("deleteTeamSnapshotBtn");
         const update = () => updateSnapshotDeleteButton(select, remove);
@@ -1598,19 +1573,20 @@
       function openNewFlowModal() {
         el("newFlowName").value = "";
         const select = el("newFlowTemplate");
-        select.replaceChildren();
-        const templates = document.createElement("optgroup");
-        templates.label = "Templates";
-        for (const template of state.flow_templates || []) {
-          const option = document.createElement("option");
-          option.value = template.id;
-          option.textContent = template.name;
-          option.dataset.version = template.version;
-          option.dataset.source = "template";
-          option.dataset.description = template.description || "";
-          templates.append(option);
-        }
-        if (templates.children.length) select.append(templates);
+        SovereignUI.selectOptions(
+          select,
+          (state.flow_templates || []).map((template) => ({
+            value: template.id,
+            label: template.name,
+            group: "Templates",
+            dataset: {
+              version: template.version,
+              source: "template",
+              description: template.description || "",
+            },
+          })),
+          {value: state.flow_templates?.[0]?.id || ""},
+        );
         appendSnapshotOptions(select, "flow");
         const remove = el("deleteFlowSnapshotBtn");
         const updateDescription = () => {
@@ -1626,35 +1602,19 @@
         el("newFlowModal").showModal();
       }
 
-      function closeAddNewMenu() {
-        el("addNewMenu").hidden = true;
-      }
-
-      el("addNewBtn").onclick = (event) => {
-        event.stopPropagation();
-        const menu = el("addNewMenu");
-        if (!menu.hidden) {
-          closeAddNewMenu();
-          return;
-        }
-        menu.replaceChildren();
-        for (const item of state.creatable || []) {
-          const choice = document.createElement("button");
-          choice.type = "button";
-          choice.textContent = item.label;
-          choice.onclick = () => {
-            closeAddNewMenu();
+      SovereignUI.actionMenu({
+        button: el("addNewBtn"),
+        align: "end",
+        emptyMessage: "No item type is available",
+        items: () => (state.creatable || []).map((item) => ({
+          label: item.label,
+          onSelect: () => {
             if (item.application_id === "team") openNewTeamModal();
             else if (item.application_id === "flow") openNewFlowModal();
             else openNewBoardModal();
-          };
-          menu.append(choice);
-        }
-        menu.hidden = false;
-        setTimeout(() => {
-          document.addEventListener("click", closeAddNewMenu, { once: true });
-        }, 0);
-      };
+          },
+        })),
+      });
 
       el("cancelNewBoardBtn").onclick = () => el("newBoardModal").close();
       el("newBoardForm").addEventListener("submit", (event) => {

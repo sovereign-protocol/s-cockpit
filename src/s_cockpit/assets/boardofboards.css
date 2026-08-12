@@ -415,7 +415,7 @@ dialog.relay-target-dialog {
   border-left-color: #de350b;
 }
 
-.bob-card.diff .bob-status-select {
+.bob-card.diff .bob-status-control {
   margin-right: 1.25rem;
 }
 
@@ -529,9 +529,8 @@ dialog.relay-target-dialog {
   width: 1.45rem;
 }
 
-.bob-status-select {
+.bob-status-control {
   flex: 0 0 auto;
-  font-size: 0.75rem;
   max-width: 7.5rem;
 }
 
@@ -653,8 +652,7 @@ dialog {
 }
 dialog input,
 dialog textarea,
-dialog select,
-.bob-status-select {
+dialog select {
   background: #0d1117;
   color: #e6edf3;
   border-color: #30363d;
@@ -701,45 +699,10 @@ button,
   font-size: 13px;
 }
 
-/* "+ Add new" dropdown and its menu. */
-.bob-add-new {
-  position: relative;
-}
-.bob-add-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
-  z-index: 50;
-  display: flex;
-  flex-direction: column;
-  min-width: 140px;
-  padding: 4px;
-  border-radius: 8px;
-  background: #161b22;
-  border: 1px solid #30363d;
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.4);
-}
-
 .bob-board.selected-topic {
   border-color: #2f6feb;
   box-shadow: 0 0 0 2px rgba(47, 111, 235, 0.18);
 }
-.bob-add-menu[hidden] {
-  display: none;
-}
-.bob-add-menu button {
-  text-align: left;
-  padding: 8px 10px;
-  border: none;
-  background: none;
-  color: #e6edf3;
-  border-radius: 6px;
-  cursor: pointer;
-}
-.bob-add-menu button:hover {
-  background: rgba(255, 255, 255, 0.08);
-}
-
 /* Team tiles carry the same header as a board tile. What differs is
    what enlarging shows: a board opens its bands, a team its text. */
 .bob-team-tile .bob-board-title {
@@ -906,18 +869,6 @@ button,
   border-color: #dfe1e6;
   color: #1b1f23;
 }
-:root[data-theme="light"] .reaction-menu {
-  background: #ffffff;
-  border-color: #dfe1e6;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.15);
-}
-:root[data-theme="light"] .reaction-menu-option {
-  color: #1b1f23;
-}
-:root[data-theme="light"] .reaction-menu-option:hover,
-:root[data-theme="light"] .reaction-menu-option:focus-visible {
-  background: #eaeef2;
-}
 /* Selection stays amber in both themes - it is a status, and U2 keeps status
    colours meaning the same thing everywhere. Only the values are retuned for
    contrast against a light card. */
@@ -934,8 +885,7 @@ button,
 }
 :root[data-theme="light"] dialog input,
 :root[data-theme="light"] dialog textarea,
-:root[data-theme="light"] dialog select,
-:root[data-theme="light"] .bob-status-select {
+:root[data-theme="light"] dialog select {
   background: #ffffff;
   color: #1b1f23;
   border-color: #dfe1e6;
@@ -951,18 +901,6 @@ button,
   background: #ffffff;
   border-color: #dfe1e6;
   color: #1b1f23;
-}
-:root[data-theme="light"] .bob-add-menu {
-  background: #ffffff;
-  border: 1px solid #dfe1e6;
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.15);
-}
-:root[data-theme="light"] .bob-add-menu button {
-  background: none;
-  color: #1b1f23;
-}
-:root[data-theme="light"] .bob-add-menu button:hover {
-  background: rgba(0, 0, 0, 0.06);
 }
 :root[data-theme="light"] .bob-board.selected-topic {
   border-color: #0969da;

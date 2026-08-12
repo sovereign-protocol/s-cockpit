@@ -229,7 +229,17 @@ class AssetTests(unittest.TestCase):
     def test_people_and_multi_type_add_use_the_shared_ui_primitives(self):
         self.assertIn("SovereignUI.avatar", self.cockpit)
         self.assertIn('class="ui-button"', self.cockpit)
+        self.assertIn("SovereignUI.actionMenu", self.cockpit)
+        self.assertNotIn('id="addNewMenu"', self.cockpit)
+        self.assertIn('content.querySelector("#addNewBtn")', self.cockpit)
+        self.assertIn("SovereignShell.setAppActions(addNew)", self.cockpit)
         self.assertIn("+ Add new…", self.cockpit)
+
+    def test_selection_controls_use_the_shared_native_select_contract(self):
+        self.assertIn("SovereignUI.selectionField", self.cockpit)
+        self.assertIn("SovereignUI.selectionControl", self.cockpit)
+        self.assertIn("SovereignUI.selectOptions", self.cockpit)
+        self.assertIn('class="ui-select"', self.cockpit)
 
     def test_cross_application_links_name_the_target_asset_prefix(self):
         self.assertIn("/apps/initiative?board=", self.cockpit)
