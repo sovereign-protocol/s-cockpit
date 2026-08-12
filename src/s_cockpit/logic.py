@@ -144,6 +144,18 @@ class BoardOfBoardsLogic:
             return []
         return [dict(item) for item in flow.templates()]
 
+    @staticmethod
+    def _facade_snapshots(facade) -> list[dict]:
+        snapshots = getattr(facade, "snapshots", None) if facade else None
+        return [dict(item) for item in snapshots()] if callable(snapshots) else []
+
+    def _item_snapshots(self) -> dict[str, list[dict]]:
+        return {
+            INITIATIVE_APPLICATION_ID: self._facade_snapshots(self._kanban()),
+            TEAM_APPLICATION_ID: self._facade_snapshots(self._team()),
+            FLOW_APPLICATION_ID: self._facade_snapshots(self._flow()),
+        }
+
     def _team_summaries(
         self, network_by_topic: dict[str, dict] | None = None,
     ) -> list[dict]:
@@ -479,6 +491,7 @@ class BoardOfBoardsLogic:
                 "teams": teams,
                 "processes": processes,
                 "flow_templates": self._flow_templates(),
+                "item_snapshots": self._item_snapshots(),
                 "tile_order": self._normalized_tile_order(
                     [], teams, processes,
                 ),
@@ -532,6 +545,7 @@ class BoardOfBoardsLogic:
             "teams": teams,
             "processes": processes,
             "flow_templates": self._flow_templates(),
+            "item_snapshots": self._item_snapshots(),
             "tile_order": self._normalized_tile_order(
                 boards_out, teams, processes,
             ),

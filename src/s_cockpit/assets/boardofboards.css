@@ -574,6 +574,15 @@ button {
   color: #57606a;
 }
 
+.snapshot-delete {
+  display: block;
+  margin: 0.25rem 0 0.75rem;
+}
+
+.snapshot-delete[hidden] {
+  display: none;
+}
+
 .bob-manage-actions {
   display: flex;
   gap: 0.5rem;
