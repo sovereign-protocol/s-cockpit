@@ -229,15 +229,63 @@ class AssetTests(unittest.TestCase):
     def test_people_and_multi_type_add_use_the_shared_ui_primitives(self):
         self.assertIn("SovereignUI.avatar", self.cockpit)
         self.assertIn('class="ui-button"', self.cockpit)
+        self.assertIn("SovereignUI.actionMenu", self.cockpit)
+        self.assertNotIn('id="addNewMenu"', self.cockpit)
+        self.assertIn('content.querySelector("#addNewBtn")', self.cockpit)
+        self.assertIn("SovereignShell.setAppActions(addNew)", self.cockpit)
         self.assertIn("+ Add new…", self.cockpit)
+
+    def test_selection_controls_use_the_shared_native_select_contract(self):
+        self.assertIn("SovereignUI.selectionField", self.cockpit)
+        self.assertIn("SovereignUI.selectionControl", self.cockpit)
+        self.assertIn("SovereignUI.selectOptions", self.cockpit)
+        self.assertIn('class="ui-select"', self.cockpit)
 
     def test_cross_application_links_name_the_target_asset_prefix(self):
         self.assertIn("/apps/initiative?board=", self.cockpit)
         self.assertIn("/apps/flow?process_uuid=", self.cockpit)
 
+    def test_flow_tiles_have_template_creation_and_owner_deletion_controls(self):
+        self.assertIn('id="newFlowModal"', self.cockpit)
+        self.assertIn('id="newFlowName"', self.cockpit)
+        self.assertIn('id="newFlowTemplate"', self.cockpit)
+        self.assertIn("state.flow_templates", self.cockpit)
+        self.assertIn("/api/cockpit/flow/processes/create", self.cockpit)
+        self.assertIn("/api/cockpit/flow/processes/delete", self.cockpit)
+        self.assertIn("/api/cockpit/flow/processes/leave", self.cockpit)
+        self.assertIn("process.can_delete", self.cockpit)
+
+    def test_all_item_types_offer_portable_snapshot_files(self):
+        self.assertNotIn('id="saveSnapshotModal"', self.cockpit)
+        self.assertIn("saveSnapshotFile", self.cockpit)
+        self.assertIn(".s-snapshot", self.cockpit)
+        self.assertIn("showSaveFilePicker", self.cockpit)
+        self.assertNotIn('accept: {"application/json": [".s-snapshot"]}', self.cockpit)
+        self.assertIn("Load snapshot file...", self.cockpit)
+        for application in ("kanban", "team", "flow"):
+            for action in ("export", "create"):
+                self.assertIn(
+                    f"/api/cockpit/{application}/snapshots/{action}",
+                    self.cockpit,
+                )
+            self.assertNotIn(
+                f"/api/cockpit/{application}/snapshots/delete",
+                self.cockpit,
+            )
+
+    def test_root_team_creation_and_expansion_use_organization_wording(self):
+        self.assertIn("<h2>New Organization</h2>", self.cockpit)
+        self.assertIn('placeholder="Untitled organization"', self.cockpit)
+        self.assertNotIn('value="Untitled organization"', self.cockpit)
+        self.assertIn('"Organization created"', self.cockpit)
+        self.assertIn(
+            'team.is_organization ? "Organization" : "Team"',
+            self.cockpit,
+        )
+
     def test_assets_do_not_call_producer_controller_namespaces(self):
         self.assertNotIn("/api/kanban", self.cockpit)
-        self.assertNotIn("/api/agreement", self.cockpit)
+        self.assertNotIn("/api/team", self.cockpit)
         self.assertNotIn("/api/flow", self.cockpit)
 
     def test_cockpit_renders_one_application_identified_tile_stream(self):
@@ -257,6 +305,24 @@ class AssetTests(unittest.TestCase):
         status_source = self.cockpit[status_start:status_end]
         self.assertNotIn("active_cards", status_source)
         self.assertNotIn("next_cards", status_source)
+
+    def test_topic_tiles_name_all_unsettled_items_as_transitions(self):
+        self.assertIn('statItem(count || 0, "in transition")', self.cockpit)
+        self.assertNotIn('? "divergence" : "divergences"', self.cockpit)
+
+    def test_objectives_and_agenda_text_use_the_shared_editor(self):
+        self.assertIn("SovereignUI.editableText", self.cockpit)
+        self.assertNotIn('div.contentEditable = "true"', self.cockpit)
+        for application in ("team", "kanban", "flow"):
+            self.assertIn(
+                f'update: "/api/cockpit/{application}/agenda/update"',
+                self.cockpit,
+            )
+
+    def test_creation_name_defaults_are_placeholders(self):
+        for default in ("Untitled initiative", "Untitled organization", "Untitled flow"):
+            self.assertIn(f'placeholder="{default}"', self.cockpit)
+            self.assertNotIn(f'value="{default}"', self.cockpit)
 
     def test_cockpit_uses_the_shared_optimistic_session_view(self):
         self.assertIn("/api/cockpit/tiles", self.cockpit)

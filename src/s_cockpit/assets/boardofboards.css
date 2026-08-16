@@ -298,29 +298,13 @@ dialog.relay-target-dialog {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
-  border: 1px solid transparent;
-  border-radius: 6px;
   font-size: 0.85rem;
   color: #24292f;
   line-height: 1.15;
-  padding: 0.1rem 0.2rem;
-  cursor: text;
-  outline: none;
-}
-
-.bob-objective:empty::before {
-  content: "Set an objective...";
-  color: #8b949e;
-}
-
-.bob-objective:hover {
-  border-color: #d0d7de;
 }
 
 .bob-objective:focus {
   -webkit-line-clamp: unset;
-  border-color: var(--teal);
-  background: #f6f8fa;
 }
 
 .bob-stat {
@@ -431,7 +415,7 @@ dialog.relay-target-dialog {
   border-left-color: #de350b;
 }
 
-.bob-card.diff .bob-status-select {
+.bob-card.diff .bob-status-control {
   margin-right: 1.25rem;
 }
 
@@ -517,39 +501,6 @@ dialog.relay-target-dialog {
   width: auto;
 }
 
-.reaction-menu {
-  position: fixed;
-  z-index: 10000;
-  display: grid;
-  width: min(30rem, calc(100vw - 16px));
-  max-height: min(24rem, calc(100vh - 16px));
-  overflow-y: auto;
-  padding: 4px;
-  border: 1px solid #8c959f;
-  border-radius: 8px;
-  background: #ffffff;
-  box-shadow: 0 12px 30px rgba(31, 35, 40, 0.25);
-}
-
-.reaction-menu[hidden] {
-  display: none;
-}
-
-.reaction-menu-option {
-  width: 100%;
-  border: 0;
-  background: transparent;
-  color: #24292f;
-  padding: 9px 10px;
-  text-align: left;
-  white-space: normal;
-}
-
-.reaction-menu-option:hover,
-.reaction-menu-option:focus-visible {
-  background: #f6f8fa;
-  outline: none;
-}
 
 .bob-card-people {
   display: flex;
@@ -578,9 +529,8 @@ dialog.relay-target-dialog {
   width: 1.45rem;
 }
 
-.bob-status-select {
+.bob-status-control {
   flex: 0 0 auto;
-  font-size: 0.75rem;
   max-width: 7.5rem;
 }
 
@@ -656,16 +606,6 @@ body {
 .bob-card-people-empty {
   color: #c9d1d9;
 }
-.bob-objective:empty::before {
-  color: #6e7681;
-}
-.bob-objective:hover {
-  border-color: #30363d;
-}
-.bob-objective:focus {
-  border-color: var(--teal);
-  background: #0d1117;
-}
 .bob-board-tools {
   background: #0d1117;
   border-color: #30363d;
@@ -690,18 +630,6 @@ body {
   border-color: #30363d;
   color: #f0f6fc;
 }
-.reaction-menu {
-  background: #161b22;
-  border-color: #30363d;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
-}
-.reaction-menu-option {
-  color: #f0f6fc;
-}
-.reaction-menu-option:hover,
-.reaction-menu-option:focus-visible {
-  background: #21262d;
-}
 .bob-card.selected {
   background: #3a2f0b;
   border-color: #d4a72c;
@@ -715,8 +643,7 @@ dialog {
 }
 dialog input,
 dialog textarea,
-dialog select,
-.bob-status-select {
+dialog select {
   background: #0d1117;
   color: #e6edf3;
   border-color: #30363d;
@@ -763,48 +690,13 @@ button,
   font-size: 13px;
 }
 
-/* "+ Add new" dropdown and its menu. */
-.bob-add-new {
-  position: relative;
-}
-.bob-add-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
-  z-index: 50;
-  display: flex;
-  flex-direction: column;
-  min-width: 140px;
-  padding: 4px;
-  border-radius: 8px;
-  background: #161b22;
-  border: 1px solid #30363d;
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.4);
-}
-
 .bob-board.selected-topic {
   border-color: #2f6feb;
   box-shadow: 0 0 0 2px rgba(47, 111, 235, 0.18);
 }
-.bob-add-menu[hidden] {
-  display: none;
-}
-.bob-add-menu button {
-  text-align: left;
-  padding: 8px 10px;
-  border: none;
-  background: none;
-  color: #e6edf3;
-  border-radius: 6px;
-  cursor: pointer;
-}
-.bob-add-menu button:hover {
-  background: rgba(255, 255, 255, 0.08);
-}
-
-/* Agreement tiles carry the same header as a board tile. What differs is
-   what enlarging shows: a board opens its bands, an agreement its text. */
-.bob-agreement-tile .bob-board-title {
+/* Team tiles carry the same header as a board tile. What differs is
+   what enlarging shows: a board opens its bands, a team its text. */
+.bob-team-tile .bob-board-title {
   align-self: flex-start;
   flex: 0 0 auto;
   max-width: 100%;
@@ -832,7 +724,7 @@ button,
   font-weight: 600;
 }
 
-.bob-agreement-document {
+.bob-team-document {
   flex: 1 1 0;
   min-height: 0;
   overflow-y: auto;
@@ -842,24 +734,24 @@ button,
   padding: 0.6rem 0.75rem;
 }
 
-.bob-agreement-document h3 {
+.bob-team-document h3 {
   margin: 0.9rem 0 0.35rem;
   font-size: 0.9rem;
   color: #c9d1d9;
 }
 
-.bob-agreement-document h3:first-child {
+.bob-team-document h3:first-child {
   margin-top: 0;
 }
 
-.bob-agreement-clause {
+.bob-team-clause {
   margin: 0 0 0.35rem;
   font-size: 0.85rem;
   line-height: 1.45;
   color: #f0f6fc;
 }
 
-/* A team is its agreement, its actors and its roles. The three parts share
+/* A team is its team, its actors and its roles. The three parts share
    the document box, and split the tile's height between them - the text is
    the part that grows, the two lists stay short and scroll if they must. */
 .bob-team-part {
@@ -869,7 +761,7 @@ button,
   gap: 0.3rem;
 }
 
-.bob-team-part-agreement {
+.bob-team-part-team {
   flex: 2 1 0;
 }
 
@@ -948,16 +840,6 @@ button,
 :root[data-theme="light"] .bob-card-people-empty {
   color: #44494f;
 }
-:root[data-theme="light"] .bob-objective:empty::before {
-  color: #8c959f;
-}
-:root[data-theme="light"] .bob-objective:hover {
-  border-color: #dfe1e6;
-}
-:root[data-theme="light"] .bob-objective:focus {
-  border-color: var(--teal);
-  background: #ffffff;
-}
 :root[data-theme="light"] .bob-board-tools {
   background: #f4f5f7;
   border-color: #dfe1e6;
@@ -978,18 +860,6 @@ button,
   border-color: #dfe1e6;
   color: #1b1f23;
 }
-:root[data-theme="light"] .reaction-menu {
-  background: #ffffff;
-  border-color: #dfe1e6;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.15);
-}
-:root[data-theme="light"] .reaction-menu-option {
-  color: #1b1f23;
-}
-:root[data-theme="light"] .reaction-menu-option:hover,
-:root[data-theme="light"] .reaction-menu-option:focus-visible {
-  background: #eaeef2;
-}
 /* Selection stays amber in both themes - it is a status, and U2 keeps status
    colours meaning the same thing everywhere. Only the values are retuned for
    contrast against a light card. */
@@ -1006,8 +876,7 @@ button,
 }
 :root[data-theme="light"] dialog input,
 :root[data-theme="light"] dialog textarea,
-:root[data-theme="light"] dialog select,
-:root[data-theme="light"] .bob-status-select {
+:root[data-theme="light"] dialog select {
   background: #ffffff;
   color: #1b1f23;
   border-color: #dfe1e6;
@@ -1024,18 +893,6 @@ button,
   border-color: #dfe1e6;
   color: #1b1f23;
 }
-:root[data-theme="light"] .bob-add-menu {
-  background: #ffffff;
-  border: 1px solid #dfe1e6;
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.15);
-}
-:root[data-theme="light"] .bob-add-menu button {
-  background: none;
-  color: #1b1f23;
-}
-:root[data-theme="light"] .bob-add-menu button:hover {
-  background: rgba(0, 0, 0, 0.06);
-}
 :root[data-theme="light"] .bob-board.selected-topic {
   border-color: #0969da;
   box-shadow: 0 0 0 2px rgba(9, 105, 218, 0.18);
@@ -1044,14 +901,14 @@ button,
   color: #cf222e;
   border-color: #cf222e;
 }
-:root[data-theme="light"] .bob-agreement-document {
+:root[data-theme="light"] .bob-team-document {
   background: #fafbfc;
   border-color: #eaecef;
 }
-:root[data-theme="light"] .bob-agreement-document h3 {
+:root[data-theme="light"] .bob-team-document h3 {
   color: #57606a;
 }
-:root[data-theme="light"] .bob-agreement-clause {
+:root[data-theme="light"] .bob-team-clause {
   color: #1b1f23;
 }
 :root[data-theme="light"] .bob-team-part-label {

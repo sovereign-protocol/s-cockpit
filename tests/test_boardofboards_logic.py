@@ -21,16 +21,16 @@ requires_initiative = unittest.skipIf(
 
 
 class _FacadeLookup:
-    def __init__(self, kanban, agreement=None, flow=None):
+    def __init__(self, kanban, team=None, flow=None):
         self.kanban = kanban
-        self.agreement = agreement
+        self.team = team
         self.flow = flow
 
     def find(self, application_id, facade_api_version):
         if application_id == "initiative" and facade_api_version == 1:
             return self.kanban
-        if application_id == "team" and facade_api_version == 1:
-            return self.agreement
+        if application_id == "team" and facade_api_version == 2:
+            return self.team
         if application_id == "flow" and facade_api_version == 1:
             return self.flow
         return None
@@ -50,32 +50,33 @@ class _StubTeamFacade:
         self.uuids = []
         self.observed_networks = []
         self.holders = {}
+        self.non_roots = set()
 
     def create(self, title):
         node = self.session.create_child(
-            self.session.root_uuid(), {"type": "agreement", "title": title}, {},
+            self.session.root_uuid(), {"type": "team", "title": title}, {},
         ).value
         self.uuids.append(node.uuid)
         return node.uuid
 
-    def add_section(self, agreement_uuid, title, order=0):
+    def add_section(self, team_uuid, title, order=0):
         return self.session.create_child(
-            agreement_uuid,
-            {"type": "agreement_section", "title": title, "order": order},
+            team_uuid,
+            {"type": "team_section", "title": title, "order": order},
             {},
         ).value.uuid
 
     def add_clause(self, section_uuid, text, order=0):
         return self.session.create_child(
             section_uuid,
-            {"type": "agreement_clause", "text": text, "order": order},
+            {"type": "team_clause", "text": text, "order": order},
             {},
         ).value.uuid
 
-    def add_role(self, agreement_uuid, name, order=0):
+    def add_role(self, team_uuid, name, order=0):
         return self.session.create_child(
-            agreement_uuid,
-            {"type": "agreement_role", "name": name, "order": order},
+            team_uuid,
+            {"type": "team_role", "name": name, "order": order},
             {},
         ).value.uuid
 
@@ -90,29 +91,32 @@ class _StubTeamFacade:
             "status": status,
         })
 
-    def agreements(self):
+    def teams(self):
         nodes = [self.session.protocol.index.get(uuid) for uuid in self.uuids]
         return [node for node in nodes if node and not node.deleted]
 
-    def sections(self, agreement):
-        return self._ordered(agreement, "agreement_section")
+    def sections(self, team):
+        return self._ordered(team, "team_section")
 
     def clauses(self, section):
-        return self._ordered(section, "agreement_clause")
+        return self._ordered(section, "team_clause")
 
-    def roles(self, agreement):
-        return self._ordered(agreement, "agreement_role")
+    def roles(self, team):
+        return self._ordered(team, "team_role")
 
-    def role_holders(self, agreement, role):
+    def is_organization(self, team):
+        return team.uuid not in self.non_roots
+
+    def role_holders(self, team, role):
         return list(self.holders.get(role.uuid, []))
 
-    def participants(self, agreement_uuid):
+    def participants(self, team_uuid):
         # Actors are who holds something here, and each is listed with what
         # they hold - an actor holding nothing accepted is an observer.
-        agreement = self.session.protocol.index.get(agreement_uuid)
+        team = self.session.protocol.index.get(team_uuid)
         people = {}
-        for role in self.roles(agreement):
-            for holder in self.role_holders(agreement, role):
+        for role in self.roles(team):
+            for holder in self.role_holders(team, role):
                 person = people.setdefault(
                     holder["actor_uuid"],
                     {**holder, "uuid": holder["actor_uuid"], "roles": []},
@@ -138,7 +142,7 @@ class _StubTeamFacade:
             key=lambda node: (float(node.data.get("order", 0)), node.created_at),
         )
 
-    def transition_events(self, agreement_uuid, network=None):
+    def transition_events(self, team_uuid, network=None):
         self.observed_networks.append(network)
         return []
 
@@ -158,13 +162,16 @@ class _StubTeamFacade:
             "known_identities": self.session.known_identities(),
         }
 
-    def create_agenda_item(self, agreement_uuid, text, priority=None):
+    def create_agenda_item(self, team_uuid, text, priority=None):
         return self.session.create_agenda_item(
-            agreement_uuid, text, priority,
+            team_uuid, text, priority,
         )
 
     def delete_agenda_item(self, item_uuid):
         return self.session.delete_agenda_item(item_uuid)
+
+    def update_agenda_item(self, item_uuid, text):
+        return self.session.update_agenda_item_text(item_uuid, text)
 
     def set_agenda_item_priority(self, item_uuid, priority):
         return self.session.set_agenda_item_priority(item_uuid, priority)
@@ -201,6 +208,23 @@ class _StubFlowFacade:
             )
         return result
 
+    @staticmethod
+    def templates():
+        return [
+            {
+                "id": "integrative-election",
+                "version": "0.2.0",
+                "name": "Integrative Election",
+                "description": "Elect a candidate through nomination and consent.",
+            },
+            {
+                "id": "minimal-consent",
+                "version": "0.2.0",
+                "name": "Minimal Consent Decision",
+                "description": "Make a small decision by consent.",
+            },
+        ]
+
     def processes(self):
         nodes = [self.session.protocol.index.get(uuid) for uuid in self.uuids]
         return [node for node in nodes if node and not node.deleted]
@@ -219,6 +243,8 @@ class _StubFlowFacade:
             "assignment_count": 1,
             "agenda_count": len(self.session.agenda_items(process.uuid)),
             "content_hash": process.content_hash,
+            "can_delete": True,
+            "can_leave": False,
         }
 
     def collaboration_context(self, topic_uuid, network=None):
@@ -237,6 +263,9 @@ class _StubFlowFacade:
     def delete_process(self, process_uuid):
         return self.session.delete(process_uuid)
 
+    def leave_process(self, process_uuid):
+        return self.session.delete(process_uuid)
+
     def create_agenda_item(self, process_uuid, text, priority=None):
         return self.session.create_agenda_item(
             process_uuid, text, priority,
@@ -245,6 +274,9 @@ class _StubFlowFacade:
     def delete_agenda_item(self, item_uuid):
         return self.session.delete_agenda_item(item_uuid)
 
+    def update_agenda_item(self, item_uuid, text):
+        return self.session.update_agenda_item_text(item_uuid, text)
+
     def set_agenda_item_priority(self, item_uuid, priority):
         return self.session.set_agenda_item_priority(item_uuid, priority)
 
@@ -252,12 +284,12 @@ class _StubFlowFacade:
         return self.session.move_agenda_item(item_uuid, index)
 
 
-def cockpit(runtime, agreement=None, flow=None):
+def cockpit(runtime, team=None, flow=None):
     return BoardOfBoardsLogic(
         runtime.session,
         runtime.config,
         facades=_FacadeLookup(
-            InitiativeFacade(runtime.logic), agreement, flow,
+            InitiativeFacade(runtime.logic), team, flow,
         ),
     )
 
@@ -289,16 +321,16 @@ class CockpitWithoutKanbanTests(unittest.TestCase):
 class BoardOfBoardsLogicTests(unittest.TestCase):
     def test_compatibility_payload_uses_explicit_detached_observations(self):
         runtime = self.runtime(8534)
-        agreement = _StubTeamFacade(runtime.session)
-        bob = cockpit(runtime, agreement)
-        agreement_uuid = agreement.create("No nested transport")
-        bob.select_topic(agreement_uuid)
+        team = _StubTeamFacade(runtime.session)
+        bob = cockpit(runtime, team)
+        team_uuid = team.create("No nested transport")
+        bob.select_topic(team_uuid)
 
         bob.summary_payload()
 
-        self.assertTrue(agreement.observed_networks)
+        self.assertTrue(team.observed_networks)
         self.assertTrue(all(
-            network == {} for network in agreement.observed_networks
+            network == {} for network in team.observed_networks
         ))
 
     def test_application_host_supplies_live_kanban_facade(self):
@@ -617,34 +649,34 @@ class BoardOfBoardsLogicTests(unittest.TestCase):
         collapsed_order = [b["uuid"] for b in payload["boards"] if not b["expanded"]]
         self.assertEqual(collapsed_order, [board_c_uuid, board_b_uuid])
 
-    def test_boards_and_agreements_share_one_tile_order(self):
+    def test_boards_and_teams_share_one_tile_order(self):
         runtime = self.runtime(8531)
         kanban: InitiativeLogic = runtime.logic
-        agreement = _StubTeamFacade(runtime.session)
-        bob = cockpit(runtime, agreement)
+        team = _StubTeamFacade(runtime.session)
+        bob = cockpit(runtime, team)
         board = kanban.ensure_board()
-        agreement_uuid = agreement.create("Working agreement")
+        team_uuid = team.create("Working team")
 
         initial = bob.summary_payload()
         self.assertEqual(
-            set(initial["tile_order"]), {board.uuid, agreement_uuid},
+            set(initial["tile_order"]), {board.uuid, team_uuid},
         )
 
-        result = bob.reorder_tiles([agreement_uuid, board.uuid])
+        result = bob.reorder_tiles([team_uuid, board.uuid])
 
         self.assertEqual(result.status, "ok")
         self.assertEqual(
             bob.summary_payload()["tile_order"],
-            [agreement_uuid, board.uuid],
+            [team_uuid, board.uuid],
         )
 
         duplicate = bob.reorder_tiles([
-            agreement_uuid, agreement_uuid, board.uuid,
+            team_uuid, team_uuid, board.uuid,
         ])
         invalid = bob.reorder_tiles("not-a-list")
 
         self.assertEqual(
-            duplicate.value, [agreement_uuid, board.uuid],
+            duplicate.value, [team_uuid, board.uuid],
         )
         self.assertEqual(invalid.status, "error")
 
@@ -822,38 +854,88 @@ class BoardOfBoardsLogicTests(unittest.TestCase):
         self.assertEqual(counts[board.uuid], 2)
         self.assertEqual(counts[other_uuid], 0)
 
-    def test_agreement_tile_reports_agenda_count_and_starts_collapsed(self):
+    def test_team_tile_reports_agenda_count_and_starts_collapsed(self):
         runtime = self.runtime(8524)
-        agreement = _StubTeamFacade(runtime.session)
-        bob = cockpit(runtime, agreement)
-        agreement_uuid = agreement.create("Working agreement")
-        runtime.session.create_agenda_item(agreement_uuid, "Revisit quorum")
+        team = _StubTeamFacade(runtime.session)
+        bob = cockpit(runtime, team)
+        team_uuid = team.create("Working team")
+        runtime.session.create_agenda_item(team_uuid, "Revisit quorum")
 
-        summary = bob.summary_payload()["agreements"][0]
+        summary = bob.summary_payload()["teams"][0]
 
-        self.assertEqual(summary["uuid"], agreement_uuid)
+        self.assertEqual(summary["uuid"], team_uuid)
+        self.assertTrue(summary["is_organization"])
         self.assertEqual(summary["agenda_count"], 1)
         self.assertFalse(summary["expanded"])
         self.assertEqual(summary["sections"], [])
+        self.assertIn(
+            {"application_id": "team", "label": "Organization"},
+            bob.summary_payload()["creatable"],
+        )
 
-    def test_agreement_agenda_items_can_be_reordered_through_the_facade(self):
+    def test_cockpit_preserves_team_s_contextual_organization_projection(self):
+        runtime = self.runtime(8531)
+        team = _StubTeamFacade(runtime.session)
+        bob = cockpit(runtime, team)
+        organization_uuid = team.create("Cooperative")
+        subteam_uuid = team.create("Research")
+        team.non_roots.add(subteam_uuid)
+
+        summaries = {
+            item["uuid"]: item for item in bob.summary_payload()["teams"]
+        }
+
+        self.assertTrue(summaries[organization_uuid]["is_organization"])
+        self.assertFalse(summaries[subteam_uuid]["is_organization"])
+
+    def test_team_agenda_items_can_be_reordered_through_the_facade(self):
         runtime = self.runtime(8530)
-        agreement = _StubTeamFacade(runtime.session)
-        bob = cockpit(runtime, agreement)
-        agreement_uuid = agreement.create("Working agreement")
-        first = agreement.create_agenda_item(
-            agreement_uuid, "First topic",
+        team = _StubTeamFacade(runtime.session)
+        bob = cockpit(runtime, team)
+        team_uuid = team.create("Working team")
+        first = team.create_agenda_item(
+            team_uuid, "First topic",
         ).value
-        second = agreement.create_agenda_item(
-            agreement_uuid, "Second topic",
+        second = team.create_agenda_item(
+            team_uuid, "Second topic",
         ).value
 
-        result = bob.move_agreement_agenda_item(second.uuid, 0)
+        result = bob.move_team_agenda_item(second.uuid, 0)
 
         self.assertEqual(result.status, "ok")
         self.assertEqual(
-            [item.uuid for item in runtime.session.agenda_items(agreement_uuid)],
+            [item.uuid for item in runtime.session.agenda_items(team_uuid)],
             [second.uuid, first.uuid],
+        )
+
+    def test_agenda_text_can_be_updated_through_application_facades(self):
+        runtime = self.runtime(8533)
+        team = _StubTeamFacade(runtime.session)
+        flow = _StubFlowFacade(runtime.session)
+        bob = cockpit(runtime, team, flow)
+        team_uuid = team.create("Working team")
+        team_item = team.create_agenda_item(team_uuid, "Team wording").value
+        process = bob.create_flow_process(
+            "Election", "integrative-election", "0.2.0",
+        ).value
+        flow_item = flow.create_agenda_item(process, "Flow wording").value
+
+        team_result = bob.update_team_agenda_item(
+            team_item.uuid, "Revised team wording",
+        )
+        flow_result = bob.update_flow_agenda_item(
+            flow_item.uuid, "Revised flow wording",
+        )
+
+        self.assertEqual(team_result.status, "ok")
+        self.assertEqual(flow_result.status, "ok")
+        self.assertEqual(
+            runtime.session.protocol.index[team_item.uuid].data["text"],
+            "Revised team wording",
+        )
+        self.assertEqual(
+            runtime.session.protocol.index[flow_item.uuid].data["text"],
+            "Revised flow wording",
         )
 
     def test_flow_process_is_a_selectable_tile_with_core_agenda(self):
@@ -880,6 +962,10 @@ class BoardOfBoardsLogicTests(unittest.TestCase):
             {"application_id": "flow", "label": "Flow"},
             payload["creatable"],
         )
+        self.assertEqual(
+            [item["id"] for item in payload["flow_templates"]],
+            ["integrative-election", "minimal-consent"],
+        )
         tile = payload["processes"][0]
         self.assertEqual(tile["title"], "Elect secretary")
         self.assertEqual(tile["current_stage"], "Configure participants")
@@ -887,20 +973,24 @@ class BoardOfBoardsLogicTests(unittest.TestCase):
         self.assertEqual(tile["agenda_count"], 1)
         self.assertFalse(tile["expanded"])
 
-    def test_enlarging_an_agreement_carries_its_whole_document(self):
+        deleted = bob.delete_flow_process(process_uuid)
+        self.assertEqual(deleted.status, "ok")
+        self.assertEqual(bob.summary_payload()["processes"], [])
+
+    def test_enlarging_an_team_carries_its_whole_document(self):
         runtime = self.runtime(8525)
-        agreement = _StubTeamFacade(runtime.session)
-        bob = cockpit(runtime, agreement)
-        agreement_uuid = agreement.create("Working agreement")
-        first = agreement.add_section(agreement_uuid, "Purpose", order=0)
-        agreement.add_clause(first, "We decide by consent.", order=0)
-        agreement.add_clause(first, "Anyone may add an item.", order=1)
-        agreement.add_section(agreement_uuid, "Scope", order=1)
+        team = _StubTeamFacade(runtime.session)
+        bob = cockpit(runtime, team)
+        team_uuid = team.create("Working team")
+        first = team.add_section(team_uuid, "Purpose", order=0)
+        team.add_clause(first, "We decide by consent.", order=0)
+        team.add_clause(first, "Anyone may add an item.", order=1)
+        team.add_section(team_uuid, "Scope", order=1)
 
         self.assertEqual(
-            bob.set_agreement_expanded(agreement_uuid, True).status, "ok",
+            bob.set_team_expanded(team_uuid, True).status, "ok",
         )
-        summary = bob.summary_payload()["agreements"][0]
+        summary = bob.summary_payload()["teams"][0]
 
         self.assertTrue(summary["expanded"])
         self.assertEqual(
@@ -914,22 +1004,22 @@ class BoardOfBoardsLogicTests(unittest.TestCase):
 
     def test_enlarging_a_team_carries_its_actors_and_roles_as_well(self):
         # A team is three parts, so the enlarged tile that shows only the
-        # agreement is showing a third of one.
+        # team is showing a third of one.
         runtime = self.runtime(8531)
-        agreement = _StubTeamFacade(runtime.session)
-        bob = cockpit(runtime, agreement)
-        agreement_uuid = agreement.create("Working agreement")
-        secretary = agreement.add_role(agreement_uuid, "Secretary", order=0)
-        treasurer = agreement.add_role(agreement_uuid, "Treasurer", order=1)
-        agreement.hold_role(secretary, "Andrea")
+        team = _StubTeamFacade(runtime.session)
+        bob = cockpit(runtime, team)
+        team_uuid = team.create("Working team")
+        secretary = team.add_role(team_uuid, "Secretary", order=0)
+        treasurer = team.add_role(team_uuid, "Treasurer", order=1)
+        team.hold_role(secretary, "Andrea")
         # Offered but not answered: nobody holds it, and the actor it was
         # offered to is in the team without holding anything.
-        agreement.hold_role(treasurer, "Bo", status="pending")
+        team.hold_role(treasurer, "Bo", status="pending")
 
         self.assertEqual(
-            bob.set_agreement_expanded(agreement_uuid, True).status, "ok",
+            bob.set_team_expanded(team_uuid, True).status, "ok",
         )
-        summary = bob.summary_payload()["agreements"][0]
+        summary = bob.summary_payload()["teams"][0]
 
         self.assertEqual(
             [(role["name"], role["holders"]) for role in summary["roles"]],
@@ -943,18 +1033,18 @@ class BoardOfBoardsLogicTests(unittest.TestCase):
             [("Andrea", ["Secretary"], False), ("Bo", [], True)],
         )
 
-    def test_collapsing_an_agreement_drops_the_document_again(self):
+    def test_collapsing_an_team_drops_the_document_again(self):
         runtime = self.runtime(8526)
-        agreement = _StubTeamFacade(runtime.session)
-        bob = cockpit(runtime, agreement)
-        agreement_uuid = agreement.create("Working agreement")
-        agreement.add_section(agreement_uuid, "Purpose")
-        role = agreement.add_role(agreement_uuid, "Secretary")
-        agreement.hold_role(role, "Andrea")
-        bob.set_agreement_expanded(agreement_uuid, True)
+        team = _StubTeamFacade(runtime.session)
+        bob = cockpit(runtime, team)
+        team_uuid = team.create("Working team")
+        team.add_section(team_uuid, "Purpose")
+        role = team.add_role(team_uuid, "Secretary")
+        team.hold_role(role, "Andrea")
+        bob.set_team_expanded(team_uuid, True)
 
-        bob.set_agreement_expanded(agreement_uuid, False)
-        summary = bob.summary_payload()["agreements"][0]
+        bob.set_team_expanded(team_uuid, False)
+        summary = bob.summary_payload()["teams"][0]
 
         self.assertFalse(summary["expanded"])
         self.assertEqual(summary["sections"], [])
@@ -963,35 +1053,35 @@ class BoardOfBoardsLogicTests(unittest.TestCase):
         self.assertEqual(summary["actors"], [])
         self.assertEqual(summary["roles"], [])
 
-    def test_missing_agreement_is_ignored_without_mutating_during_a_read(self):
+    def test_missing_team_is_ignored_without_mutating_during_a_read(self):
         runtime = self.runtime(8527)
-        agreement = _StubTeamFacade(runtime.session)
-        bob = cockpit(runtime, agreement)
-        agreement_uuid = agreement.create("Working agreement")
-        bob.set_agreement_expanded(agreement_uuid, True)
+        team = _StubTeamFacade(runtime.session)
+        bob = cockpit(runtime, team)
+        team_uuid = team.create("Working team")
+        bob.set_team_expanded(team_uuid, True)
 
-        runtime.session.delete(agreement_uuid)
+        runtime.session.delete(team_uuid)
         payload = bob.summary_payload()
 
-        self.assertEqual(payload["agreements"], [])
+        self.assertEqual(payload["teams"], [])
         with runtime.session.lock:
             self.assertEqual(
-                bob._metadata()["expanded_agreement_uuids"], [agreement_uuid],
+                bob._metadata()["expanded_team_uuids"], [team_uuid],
             )
 
-    def test_set_agreement_expanded_rejects_an_unknown_agreement(self):
+    def test_set_team_expanded_rejects_an_unknown_team(self):
         runtime = self.runtime(8528)
         bob = cockpit(runtime, _StubTeamFacade(runtime.session))
 
-        result = bob.set_agreement_expanded("no-such-uuid", True)
+        result = bob.set_team_expanded("no-such-uuid", True)
 
         self.assertEqual(result.status, "error")
 
-    def test_agreement_expansion_needs_the_agreement_application(self):
+    def test_team_expansion_needs_the_team_application(self):
         runtime = self.runtime(8529)
         bob = cockpit(runtime)
 
-        result = bob.set_agreement_expanded("any-uuid", True)
+        result = bob.set_team_expanded("any-uuid", True)
 
         self.assertEqual(result.status, "error")
         self.assertIn("not active", result.reason)

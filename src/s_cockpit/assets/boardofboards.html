@@ -14,15 +14,10 @@
     <header class="bob-topbar"><div id="shell"></div></header>
 
     <template id="cockpitHeaderControls">
-      <div class="bob-add-new">
-        <button id="addNewBtn" class="ui-button" aria-haspopup="true">+ Add new…</button>
-        <div id="addNewMenu" class="bob-add-menu" hidden></div>
-      </div>
+      <button id="addNewBtn" class="ui-button">+ Add new…</button>
     </template>
 
     <main id="boards" class="bob-boards"></main>
-
-    <div id="reactionMenu" class="reaction-menu" role="menu" hidden></div>
 
     <dialog id="cardModal">
       <form method="dialog" id="cardForm">
@@ -31,7 +26,7 @@
         <p id="cardPerspectiveMeta" class="perspective-meta"></p>
         <label>Name<input id="cardName" /></label>
         <label>Description<textarea id="cardDescription" rows="4"></textarea></label>
-        <label>Owner<select id="cardOwner"></select></label>
+        <label>Owner<select id="cardOwner" class="ui-select"></select></label>
         <label>Members</label>
         <div id="participantPicker" class="user-picker"></div>
         <menu>
@@ -47,6 +42,7 @@
         <h2 id="boardSettingsTitle">Initiative settings</h2>
         <div id="boardSettingsFields"></div>
         <menu>
+          <button type="button" id="saveBoardSnapshotBtn">Save snapshot...</button>
           <button type="button" id="deleteBoardSettingsBtn" class="danger">Delete initiative</button>
           <button type="button" id="cancelBoardSettingsBtn">Cancel</button>
           <button type="button" id="saveBoardSettingsBtn" class="primary">Save</button>
@@ -56,14 +52,27 @@
 
     <dialog id="agreementSettingsModal">
       <div class="bob-manage">
-        <h2 id="agreementSettingsTitle">Team settings</h2>
-        <p class="bob-hint">
+        <h2 id="agreementSettingsTitle">Organization settings</h2>
+        <p class="bob-hint" id="teamSettingsHint">
           A team has nothing to map onto bands the way an initiative does, so this is where deleting
           one lives.
         </p>
         <menu>
-          <button type="button" id="deleteAgreementBtn" class="danger">Delete team</button>
-          <button type="button" id="cancelAgreementSettingsBtn">Cancel</button>
+          <button type="button" id="saveTeamSnapshotBtn">Save snapshot...</button>
+          <button type="button" id="deleteTeamBtn" class="danger">Delete team</button>
+          <button type="button" id="cancelTeamSettingsBtn">Cancel</button>
+        </menu>
+      </div>
+    </dialog>
+
+    <dialog id="flowSettingsModal">
+      <div class="bob-manage">
+        <h2 id="flowSettingsTitle">Flow settings</h2>
+        <p id="flowSettingsHint" class="bob-hint"></p>
+        <menu>
+          <button type="button" id="saveFlowSnapshotBtn">Save snapshot...</button>
+          <button type="button" id="deleteFlowBtn" class="danger">Remove flow</button>
+          <button type="button" id="cancelFlowSettingsBtn">Cancel</button>
         </menu>
       </div>
     </dialog>
@@ -71,8 +80,12 @@
     <dialog id="newBoardModal">
       <form method="dialog" id="newBoardForm">
         <h2>New Initiative</h2>
-        <label>Name<input id="newBoardName" value="Untitled initiative" /></label>
-        <label>Copy from (optional)<select id="newBoardTemplate"></select></label>
+        <label>Name<input id="newBoardName" class="ui-text-field"
+                          placeholder="Untitled initiative" /></label>
+        <label>Create from<select id="newBoardTemplate" class="ui-select"></select></label>
+        <button type="button" id="loadBoardSnapshotBtn">Load snapshot file...</button>
+        <input type="file" id="boardSnapshotFile" accept=".s-snapshot,application/json" hidden />
+        <p id="boardSnapshotFileStatus" class="bob-hint"></p>
         <menu>
           <button type="button" id="cancelNewBoardBtn">Cancel</button>
           <button type="submit" class="primary">Create</button>
@@ -80,13 +93,34 @@
       </form>
     </dialog>
 
-    <dialog id="newAgreementModal">
-      <form method="dialog" id="newAgreementForm">
-        <h2>New Team</h2>
-        <label>Name<input id="newAgreementName" value="Untitled team" /></label>
-        <label>Copy from (optional)<select id="newAgreementTemplate"></select></label>
+    <dialog id="newTeamModal">
+      <form method="dialog" id="newTeamForm">
+        <h2>New Organization</h2>
+        <label>Name<input id="newTeamName" class="ui-text-field"
+                          placeholder="Untitled organization" /></label>
+        <label>Create from<select id="newTeamTemplate" class="ui-select"></select></label>
+        <button type="button" id="loadTeamSnapshotBtn">Load snapshot file...</button>
+        <input type="file" id="teamSnapshotFile" accept=".s-snapshot,application/json" hidden />
+        <p id="teamSnapshotFileStatus" class="bob-hint"></p>
         <menu>
-          <button type="button" id="cancelNewAgreementBtn">Cancel</button>
+          <button type="button" id="cancelNewTeamBtn">Cancel</button>
+          <button type="submit" class="primary">Create</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog id="newFlowModal">
+      <form method="dialog" id="newFlowForm">
+        <h2>New Flow</h2>
+        <label>Name<input id="newFlowName" class="ui-text-field"
+                          placeholder="Untitled flow" /></label>
+        <label>Create from<select id="newFlowTemplate" class="ui-select" required></select></label>
+        <p id="newFlowTemplateDescription" class="bob-hint"></p>
+        <button type="button" id="loadFlowSnapshotBtn">Load snapshot file...</button>
+        <input type="file" id="flowSnapshotFile" accept=".s-snapshot,application/json" hidden />
+        <p id="flowSnapshotFileStatus" class="bob-hint"></p>
+        <menu>
+          <button type="button" id="cancelNewFlowBtn">Cancel</button>
           <button type="submit" class="primary">Create</button>
         </menu>
       </form>
@@ -114,7 +148,9 @@
       let modalLocalDraft = null;
       let modalReadOnlyPerspective = false;
       let settingsBoard = null;
-      let settingsAgreement = null;
+      let settingsTeam = null;
+      let settingsFlow = null;
+      const snapshotImports = {initiative: null, team: null, flow: null};
       const AUTO_ADOPT_LABELS = {
         always: "Always",
         not_owner: "Except cards I own",
@@ -132,7 +168,7 @@
           '<rect x="4" y="4" width="4" height="16" rx="1"></rect>' +
           '<rect x="10" y="4" width="4" height="11" rx="1"></rect>' +
           '<rect x="16" y="4" width="4" height="7" rx="1"></rect>',
-        agreement:
+        team:
           '<path d="M6 3h8l4 4v14H6z"></path>' +
           '<path d="M14 3v4h4"></path><path d="M9 13h6"></path>' +
           '<path d="M9 17h6"></path>',
@@ -212,9 +248,9 @@
       function render() {
         const container = el("boards");
         container.replaceChildren();
-        const agreements = state.agreements || [];
+        const teams = state.teams || [];
         const processes = state.processes || [];
-        if (!state.boards.length && !agreements.length && !processes.length) {
+        if (!state.boards.length && !teams.length && !processes.length) {
           const empty = document.createElement("p");
           empty.className = "bob-empty";
           empty.textContent = "Nothing yet - use “+ Add new”.";
@@ -229,7 +265,7 @@
         expanded.forEach((tile, index) => {
           container.append(
             tile.application_id === "team"
-              ? renderExpandedAgreement(tile, index, expanded.length)
+              ? renderExpandedTeam(tile, index, expanded.length)
               : tile.application_id === "flow"
                 ? renderFlowTile(tile, index, expanded.length)
                 : renderExpandedBoard(tile, index, expanded.length),
@@ -241,7 +277,7 @@
           group.forEach((tile, i) =>
             lane.append(
               tile.application_id === "team"
-                ? renderAgreementTile(tile, chunkIndex * 5 + i, collapsed.length)
+                ? renderTeamTile(tile, chunkIndex * 5 + i, collapsed.length)
                 : tile.application_id === "flow"
                   ? renderFlowTile(tile, chunkIndex * 5 + i, collapsed.length)
                   : renderCollapsedBoard(tile, chunkIndex * 5 + i, collapsed.length),
@@ -264,7 +300,7 @@
         link.textContent = topic.title;
         link.href =
           topic.application_id === "team"
-            ? `/apps/team?agreement=${encodeURIComponent(topic.uuid)}`
+            ? `/apps/team?team=${encodeURIComponent(topic.uuid)}`
             : topic.application_id === "flow"
               ? `/apps/flow?process_uuid=${encodeURIComponent(topic.uuid)}`
               : `/apps/initiative?board=${encodeURIComponent(topic.uuid)}`;
@@ -291,7 +327,7 @@
             draft.selected_topic = nextTopic;
             for (const entry of [
               ...(draft.boards || []),
-              ...(draft.agreements || []),
+              ...(draft.teams || []),
               ...(draft.processes || []),
             ]) {
               entry.selected_topic = entry.uuid === nextTopic.uuid;
@@ -316,7 +352,7 @@
         const order = new Map((state.tile_order || []).map((uuid, index) => [uuid, index]));
         return [
           ...(state.boards || []),
-          ...(state.agreements || []),
+          ...(state.teams || []),
           ...(state.processes || []),
         ].sort(
           (left, right) =>
@@ -343,11 +379,11 @@
         return title;
       }
 
-      function renderAgreementTile(agreement, index, total) {
+      function renderTeamTile(team, index, total) {
         const tile = document.createElement("section");
-        tile.className = "bob-board collapsed bob-agreement-tile";
-        makeTopicSelectable(tile, agreement);
-        tile.append(agreementHeader(agreement, index, total));
+        tile.className = "bob-board collapsed bob-team-tile";
+        makeTopicSelectable(tile, team);
+        tile.append(agreementHeader(team, index, total));
         return tile;
       }
 
@@ -385,6 +421,9 @@
         controls.append(moveButton("<", index === 0, () => moveTile(process, -1)));
         controls.append(moveButton(">", index >= total - 1, () => moveTile(process, 1)));
         controls.append(iconButton(ICON_SHARE, "Share", () => openShareModal(process)));
+        if (process.can_delete || process.can_leave) {
+          controls.append(iconButton(ICON_SETTINGS, "Settings", () => openFlowSettings(process)));
+        }
         const status = document.createElement("div");
         status.className = "bob-board-status";
         status.append(
@@ -397,18 +436,22 @@
         return tile;
       }
 
-      function renderExpandedAgreement(agreement, index, total) {
+      function renderExpandedTeam(team, index, total) {
         const panel = document.createElement("section");
-        panel.className = "bob-board expanded bob-agreement-tile";
-        makeTopicSelectable(panel, agreement);
-        panel.append(agreementHeader(agreement, index, total));
+        panel.className = "bob-board expanded bob-team-tile";
+        makeTopicSelectable(panel, team);
+        panel.append(agreementHeader(team, index, total));
         // A team is three parts, and the enlarged tile shows all of them in
         // the order they are agreed: what was agreed, who is in it, and what
         // they hold.
         panel.append(
-          teamPart("Agreement", agreementDocument(agreement)),
-          teamPart("Actors", agreementActors(agreement)),
-          teamPart("Roles", agreementRoles(agreement)),
+          teamPart(
+            team.is_organization ? "Organization" : "Team",
+            agreementDocument(team),
+            "team",
+          ),
+          teamPart("Actors", agreementActors(team)),
+          teamPart("Roles", agreementRoles(team)),
         );
         return panel;
       }
@@ -416,15 +459,15 @@
       // The same header a board gets: move, enlarge/collapse, share,
       // settings, and the counts underneath. The two topic kinds differ in
       // what enlarging shows, not in what a tile offers.
-      function agreementHeader(agreement, index, total) {
+      function agreementHeader(team, index, total) {
         const header = document.createElement("div");
         header.className = "bob-board-header";
         const main = document.createElement("div");
         main.className = "bob-board-main";
         const title = topicTitle(
-          "agreement",
-          agreement.title || "Untitled team",
-          `/apps/team?agreement=${encodeURIComponent(agreement.uuid)}`,
+          "team",
+          team.title || "Untitled team",
+          `/apps/team?team=${encodeURIComponent(team.uuid)}`,
         );
         main.append(title);
         header.append(main);
@@ -432,41 +475,41 @@
         tools.className = "bob-board-tools";
         const controls = document.createElement("div");
         controls.className = "bob-board-controls";
-        controls.append(moveButton("<", index === 0, () => moveTile(agreement, -1)));
-        controls.append(moveButton(">", index >= total - 1, () => moveTile(agreement, 1)));
-        if (agreement.expanded) {
+        controls.append(moveButton("<", index === 0, () => moveTile(team, -1)));
+        controls.append(moveButton(">", index >= total - 1, () => moveTile(team, 1)));
+        if (team.expanded) {
           controls.append(
-            iconButton(ICON_COLLAPSE, "Collapse", () => setAgreementExpanded(agreement, false)),
+            iconButton(ICON_COLLAPSE, "Collapse", () => setTeamExpanded(team, false)),
           );
         } else {
           controls.append(
-            iconButton(ICON_EXPAND, "Enlarge", () => setAgreementExpanded(agreement, true)),
+            iconButton(ICON_EXPAND, "Enlarge", () => setTeamExpanded(team, true)),
           );
         }
-        controls.append(iconButton(ICON_SHARE, "Share", () => openShareModal(agreement)));
+        controls.append(iconButton(ICON_SHARE, "Share", () => openShareModal(team)));
         controls.append(
-          iconButton(ICON_SETTINGS, "Settings", () => openAgreementSettings(agreement)),
+          iconButton(ICON_SETTINGS, "Settings", () => openTeamSettings(team)),
         );
-        tools.append(controls, agreementStatus(agreement));
+        tools.append(controls, agreementStatus(team));
         header.append(tools);
         return header;
       }
 
-      function agreementStatus(agreement) {
+      function agreementStatus(team) {
         const status = document.createElement("div");
         status.className = "bob-board-status";
         status.append(
-          divergenceItem(agreement.unsettled_count),
-          statItem(agreement.agenda_count, "agenda"),
+          transitionItem(team.unsettled_count),
+          statItem(team.agenda_count, "agenda"),
         );
         return status;
       }
 
       // One part of a team - its name, and the box that shows it. The three
       // parts share a shape so the tile reads as one thing rather than three.
-      function teamPart(label, body) {
+      function teamPart(label, body, kind = label) {
         const part = document.createElement("div");
-        part.className = `bob-team-part bob-team-part-${label.toLowerCase()}`;
+        part.className = `bob-team-part bob-team-part-${kind.toLowerCase()}`;
         const heading = document.createElement("h3");
         heading.className = "bob-team-part-label";
         heading.textContent = label;
@@ -476,24 +519,24 @@
 
       // Loading and empty are different facts, and a part that is still
       // arriving must not claim there is nothing in it.
-      function teamPartHint(agreement, emptyText) {
+      function teamPartHint(team, emptyText) {
         const hint = document.createElement("p");
         hint.className = "bob-hint";
-        hint.textContent = agreement.optimistic_loading
+        hint.textContent = team.optimistic_loading
           ? "Loading team..."
           : emptyText;
         return hint;
       }
 
-      function agreementDocument(agreement) {
-        // Read-only: the tile shows the agreement, the team application
+      function agreementDocument(team) {
+        // Read-only: the tile shows the team, the team application
         // is where it is edited. The title above already links there.
         const wrap = document.createElement("div");
-        wrap.className = "bob-agreement-document";
-        const sections = agreement.sections || [];
+        wrap.className = "bob-team-document";
+        const sections = team.sections || [];
         if (!sections.length) {
           wrap.append(
-            teamPartHint(agreement, "Nothing has been agreed yet."),
+            teamPartHint(team, "Nothing has been agreed yet."),
           );
           return wrap;
         }
@@ -503,7 +546,7 @@
           wrap.append(heading);
           for (const clause of section.clauses || []) {
             const line = document.createElement("p");
-            line.className = "bob-agreement-clause";
+            line.className = "bob-team-clause";
             line.textContent = clause.text || "";
             wrap.append(line);
           }
@@ -514,12 +557,12 @@
       // Who is in the team, and what each of them holds. Only settled
       // holdings are named: an offer still being answered belongs in the
       // team application, where it can be answered.
-      function agreementActors(agreement) {
+      function agreementActors(team) {
         const wrap = document.createElement("div");
-        wrap.className = "bob-agreement-document bob-team-list";
-        const actors = agreement.actors || [];
+        wrap.className = "bob-team-document bob-team-list";
+        const actors = team.actors || [];
         if (!actors.length) {
-          wrap.append(teamPartHint(agreement, "Nobody has joined yet."));
+          wrap.append(teamPartHint(team, "Nobody has joined yet."));
           return wrap;
         }
         for (const actor of actors) {
@@ -538,12 +581,12 @@
         return wrap;
       }
 
-      function agreementRoles(agreement) {
+      function agreementRoles(team) {
         const wrap = document.createElement("div");
-        wrap.className = "bob-agreement-document bob-team-list";
-        const roles = agreement.roles || [];
+        wrap.className = "bob-team-document bob-team-list";
+        const roles = team.roles || [];
         if (!roles.length) {
-          wrap.append(teamPartHint(agreement, "No roles yet."));
+          wrap.append(teamPartHint(team, "No roles yet."));
           return wrap;
         }
         for (const role of roles) {
@@ -571,19 +614,19 @@
         return row;
       }
 
-      function setAgreementExpanded(agreement, expanded) {
+      function setTeamExpanded(team, expanded) {
         return submitMutation({
-          key: `expanded:${agreement.uuid}`,
-          command: "set-agreement-expanded",
-          arguments: { uuid: agreement.uuid, expanded },
+          key: `expanded:${team.uuid}`,
+          command: "set-team-expanded",
+          arguments: { uuid: team.uuid, expanded },
           action: (request) =>
-            request("/api/cockpit/agreements/settings", {
-              agreement_uuid: agreement.uuid,
+            request("/api/cockpit/teams/settings", {
+              team_uuid: team.uuid,
               expanded,
             }),
           successMessage: expanded ? "Enlarged" : "Collapsed",
           project: (draft, change) => {
-            const target = (draft.agreements || []).find((entry) => entry.uuid === change.uuid);
+            const target = (draft.teams || []).find((entry) => entry.uuid === change.uuid);
             if (target) {
               target.expanded = change.expanded;
               target.optimistic_loading = change.expanded && !(target.sections || []).length;
@@ -702,24 +745,23 @@
         wrap.className = "bob-objective-wrap";
         const div = document.createElement("div");
         div.className = "bob-objective";
-        div.contentEditable = "true";
-        div.textContent = board.objective || "";
-        div.title = board.objective || "";
-        div.onkeydown = (event) => {
-          if (event.key === "Enter") event.preventDefault();
-        };
-        div.onblur = () => {
-          const value = div.textContent.trim();
-          div.title = value;
-          run(
+        SovereignUI.editableText({
+          element: div,
+          value: board.objective || "",
+          placeholder: "Set an objective...",
+          ariaLabel: "Initiative objective",
+          allowEmpty: true,
+          titleFromValue: true,
+          onCommit: (value) => run(
             (request) =>
               request("/api/cockpit/kanban/boards/set_objective", {
                 board_uuid: board.uuid,
                 objective: value,
               }),
             "Objective updated",
-          );
-        };
+          ),
+          onError: () => {},
+        });
         wrap.append(div);
         return wrap;
       }
@@ -728,7 +770,7 @@
         const status = document.createElement("div");
         status.className = "bob-board-status";
         status.append(
-          divergenceItem(board.discussion_count),
+          transitionItem(board.discussion_count),
           statItem(board.agenda_count, "agenda"),
         );
         return status;
@@ -741,10 +783,10 @@
         return item;
       }
 
-      // The count both topic kinds lead with, and the only one that is
-      // coloured - an unresolved difference is the thing worth noticing.
-      function divergenceItem(count) {
-        const item = statItem(count || 0, count === 1 ? "divergence" : "divergences");
+      // This includes incoming work and changes that are merely awaiting a
+      // peer, so it must not imply that every item is ours to resolve.
+      function transitionItem(count) {
+        const item = statItem(count || 0, "in transition");
         if (count > 0) item.classList.add("bob-stat-divergence");
         return item;
       }
@@ -808,42 +850,37 @@
         row.append(cardDiscussionTools(card));
         row.append(cardPeople(card));
 
-        const select = document.createElement("select");
-        select.className = "bob-status-select";
-        for (const column of board.columns) {
-          const opt = document.createElement("option");
-          opt.value = column.uuid;
-          opt.textContent = column.name;
-          select.append(opt);
-        }
+        const statusOptions = board.columns.map((column) => [column.uuid, column.name]);
         if (band === "Active") {
-          const opt = document.createElement("option");
-          opt.value = "__selected__";
-          opt.textContent = "Selected";
-          select.append(opt);
+          statusOptions.push(["__selected__", "Selected"]);
         }
-        select.value = card.column_uuid;
-        select.onchange = () => {
-          const value = select.value;
-          if (value === "__selected__") {
+        const {control} = SovereignUI.selectionControl({
+          items: statusOptions,
+          value: card.column_uuid,
+          variant: "compact",
+          controlClass: "bob-status-control",
+          onChange: ({currentTarget: select}) => {
+            const value = select.value;
+            if (value === "__selected__") {
+              run(
+                (request) =>
+                  request("/api/cockpit/cards/toggle_selected", { card_uuid: card.uuid }),
+                "Updated",
+              );
+              return;
+            }
             run(
               (request) =>
-                request("/api/cockpit/cards/toggle_selected", { card_uuid: card.uuid }),
-              "Updated",
+                request("/api/cockpit/kanban/cards/move", {
+                  card_uuid: card.uuid,
+                  column_uuid: value,
+                  index: 0,
+                }),
+              "Moved",
             );
-            return;
-          }
-          run(
-            (request) =>
-              request("/api/cockpit/kanban/cards/move", {
-                card_uuid: card.uuid,
-                column_uuid: value,
-                index: 0,
-              }),
-            "Moved",
-          );
-        };
-        row.append(select);
+          },
+        });
+        row.append(control);
         return row;
       }
 
@@ -859,93 +896,33 @@
         wrap.className = "bob-card-discussion-tools";
         const info = card.transition;
         if (!info || ["settled", "in_flight"].includes(info.stage)) return wrap;
-        wrap.append(reactionButton(card));
+        // The control is Core's, so a divergence offers the same acts, worded
+        // the same way, whether it is met here or in the application itself.
+        const control = SovereignUI.reactionControl({
+          info,
+          className: "bob-react",
+          onReact: (choice) => applyReaction(card.uuid, choice),
+        });
+        if (control) wrap.append(control);
         return wrap;
       }
 
-      function reactionButton(card) {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "bob-react";
-        button.setAttribute("aria-label", "React to differences");
-        button.title = transitionLabel(card.transition);
-        button.textContent = "React";
-        const events = (card.transition?.events || [card.transition]).filter(
-          (event) => event && event.type !== "in_agreement",
+      async function applyReaction(uuid, choice) {
+        const endpoint =
+          choice.action === "rollback"
+            ? "/api/cockpit/kanban/rollback"
+            : "/api/cockpit/kanban/adopt";
+        await run(
+          (request) =>
+            request(endpoint, {
+              source_addr: choice.peerAddr,
+              node_uuid: uuid,
+              adopt_absence: choice.action === "adopt" && choice.absent,
+              rollback_absence: choice.action === "rollback" && choice.absent,
+            }),
+          choice.action === "rollback" ? "Rolled back" : "Adopted",
         );
-        const reactions = events.map((event) => ({
-          // Same wording as Kanban, from Core: named for the act, from the
-          // side being offered the choice.
-          label: transitionReactionLabel(event),
-          action: event.reaction || "adopt",
-          event,
-        }));
-        button.onclick = (event) => {
-          event.stopPropagation();
-          openReactionMenu(button, card, reactions);
-        };
-        return button;
       }
-
-      function closeReactionMenu() {
-        const menu = el("reactionMenu");
-        menu.hidden = true;
-        menu.replaceChildren();
-      }
-
-      function openReactionMenu(anchor, card, reactions) {
-        if (!reactions.length) return;
-        const menu = el("reactionMenu");
-        menu.replaceChildren();
-        for (const reaction of reactions) {
-          const option = document.createElement("button");
-          option.type = "button";
-          option.className = "reaction-menu-option";
-          option.textContent = reaction.label;
-          option.onclick = async (event) => {
-            event.stopPropagation();
-            closeReactionMenu();
-            const missing = reaction.event.type === "peer_missing_node";
-            const endpoint =
-              reaction.action === "rollback"
-                ? "/api/cockpit/kanban/rollback"
-                : "/api/cockpit/kanban/adopt";
-            await run(
-              (request) =>
-                request(endpoint, {
-                  source_addr: reaction.event.peer_addr,
-                  node_uuid: card.uuid,
-                  adopt_absence: reaction.action === "adopt" && missing,
-                  rollback_absence: reaction.action === "rollback" && missing,
-                }),
-              reaction.action === "rollback" ? "Rolled back" : "Adopted",
-            );
-          };
-          menu.append(option);
-        }
-        menu.hidden = false;
-        const rect = anchor.getBoundingClientRect();
-        const margin = 8;
-        const left = Math.max(
-          margin,
-          Math.min(rect.left, window.innerWidth - menu.offsetWidth - margin),
-        );
-        let top = rect.bottom + 4;
-        if (top + menu.offsetHeight > window.innerHeight - margin) {
-          top = Math.max(margin, rect.top - menu.offsetHeight - 4);
-        }
-        menu.style.left = `${left}px`;
-        menu.style.top = `${top}px`;
-      }
-
-      document.addEventListener("click", (event) => {
-        if (!event.target.closest("#reactionMenu")) closeReactionMenu();
-      });
-      document.addEventListener("keydown", (event) => {
-        if (event.key === "Escape") closeReactionMenu();
-      });
-      window.addEventListener("resize", closeReactionMenu);
-      window.addEventListener("scroll", closeReactionMenu, true);
 
       function peerLabel(address) {
         const user = (state.users || []).find((item) => item.address === address);
@@ -1060,20 +1037,16 @@
 
       function renderOwnerSelect() {
         const select = el("cardOwner");
-        select.replaceChildren();
-        const blank = document.createElement("option");
-        blank.value = "";
-        blank.textContent = "Unassigned";
-        select.append(blank);
-        for (const id of modalParticipants) {
-          const option = document.createElement("option");
-          option.value = id;
-          option.textContent = personFor(id).name;
-          select.append(option);
-        }
-        select.value = modalParticipants.includes(modalOwner) ? modalOwner : "";
+        SovereignUI.selectOptions(
+          select,
+          modalParticipants.map((id) => [id, personFor(id).name]),
+          {
+            emptyLabel: "Unassigned",
+            value: modalParticipants.includes(modalOwner) ? modalOwner : "",
+            disabled: modalReadOnlyPerspective,
+          },
+        );
         modalOwner = select.value || null;
-        select.disabled = modalReadOnlyPerspective;
       }
 
       function setExpanded(board, expanded) {
@@ -1114,41 +1087,132 @@
         const active = el("settingsActiveColumn");
         const next = el("settingsNextColumn");
         active.onchange = () => {
-          if (active.value && active.value === next.value) next.value = "";
+          if (active.value && active.value === next.value) {
+            next.value = "";
+            SovereignUI.refreshSelect(next);
+          }
         };
         next.onchange = () => {
-          if (next.value && next.value === active.value) active.value = "";
+          if (next.value && next.value === active.value) {
+            active.value = "";
+            SovereignUI.refreshSelect(active);
+          }
         };
         el("boardSettingsModal").showModal();
       }
 
-      function openAgreementSettings(agreement) {
-        settingsAgreement = agreement;
-        el("agreementSettingsTitle").textContent = agreement.title || "Untitled team";
+      function openTeamSettings(team) {
+        settingsTeam = team;
+        el("agreementSettingsTitle").textContent = team.title || "Untitled team";
+        const kind = team.is_organization ? "organization" : "team";
+        el("teamSettingsHint").textContent =
+          `A ${kind} has nothing to map onto bands the way an initiative does, ` +
+          "so this is where deleting one lives.";
+        el("deleteTeamBtn").textContent = `Delete ${kind}`;
         el("agreementSettingsModal").showModal();
       }
 
+      function openFlowSettings(process) {
+        settingsFlow = process;
+        el("flowSettingsTitle").textContent = process.title || "Untitled flow";
+        el("deleteFlowBtn").textContent = process.can_delete ? "Delete flow" : "Leave flow";
+        el("flowSettingsHint").textContent = process.can_delete
+          ? "Deleting removes this flow and its history from this client. Other participants keep their copies."
+          : "Leaving removes this shared flow from your Cockpit without deleting it for its creator.";
+        el("flowSettingsModal").showModal();
+      }
+
       function selectField(id, text, columns, value) {
-        const label = document.createElement("label");
-        label.textContent = text;
-        const select = document.createElement("select");
-        select.id = id;
-        const empty = document.createElement("option");
-        empty.value = "";
-        empty.textContent = "None";
-        select.append(empty);
-        for (const column of columns) {
-          const option = document.createElement("option");
-          option.value = column.uuid;
-          option.textContent = column.name;
-          select.append(option);
+        return SovereignUI.selectionField({
+          id,
+          label: text,
+          items: columns.map((column) => [column.uuid, column.name]),
+          emptyLabel: "None",
+          value,
+        }).field;
+      }
+
+      function snapshotExportConfig(applicationId) {
+        const config = {
+          initiative: {
+            path: "/api/cockpit/kanban/snapshots/export",
+            key: "board_uuid",
+          },
+          team: {
+            path: "/api/cockpit/team/snapshots/export",
+            key: "team_uuid",
+          },
+          flow: {
+            path: "/api/cockpit/flow/snapshots/export",
+            key: "process_uuid",
+          },
+        }[applicationId];
+        return config;
+      }
+
+      function snapshotFilename(name) {
+        const stem = String(name || "snapshot")
+          .replace(/[^A-Za-z0-9._-]+/g, "-")
+          .replace(/^-+|-+$/g, "");
+        return `${stem || "snapshot"}.s-snapshot`;
+      }
+
+      async function writeSnapshotFile(snapshot, handle = null) {
+        const text = JSON.stringify(snapshot, null, 2);
+        if (handle) {
+          const writable = await handle.createWritable();
+          await writable.write(text);
+          await writable.close();
+          return;
         }
-        select.value = value;
-        label.append(select);
-        return label;
+        const blob = new Blob([text], {type: "application/json"});
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = snapshotFilename(snapshot.name);
+        document.body.append(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 0);
+      }
+
+      async function saveSnapshotFile(applicationId, sourceUuid, title) {
+        const target = snapshotExportConfig(applicationId);
+        const name = `${title} snapshot`;
+        let handle = null;
+        if (window.showSaveFilePicker) {
+          try {
+            handle = await window.showSaveFilePicker({
+              suggestedName: snapshotFilename(name),
+            });
+          } catch (error) {
+            if (error.name === "AbortError") return;
+            showToast(error.message, true);
+            return;
+          }
+        } else {
+          showToast("Save-location selection is unavailable; downloading to your browser's download folder.");
+        }
+        try {
+          const result = await api(target.path, {
+            [target.key]: sourceUuid,
+            name,
+            description: "",
+          });
+          await writeSnapshotFile(result.value, handle);
+          showToast(handle ? "Snapshot saved" : "Snapshot downloaded");
+        } catch (error) {
+          showToast(error.message, true);
+        }
       }
 
       el("cancelBoardSettingsBtn").onclick = () => el("boardSettingsModal").close();
+      el("saveBoardSnapshotBtn").onclick = () => {
+        const board = settingsBoard;
+        if (!board) return;
+        el("boardSettingsModal").close();
+        saveSnapshotFile("initiative", board.uuid, board.name || "Untitled initiative");
+      };
       el("deleteBoardSettingsBtn").onclick = () => {
         const board = settingsBoard;
         if (!board) return;
@@ -1167,22 +1231,59 @@
           },
         );
       };
-      el("cancelAgreementSettingsBtn").onclick = () => el("agreementSettingsModal").close();
-      el("deleteAgreementBtn").onclick = () => {
-        const agreement = settingsAgreement;
-        if (!agreement) return;
+      el("cancelTeamSettingsBtn").onclick = () => el("agreementSettingsModal").close();
+      el("saveTeamSnapshotBtn").onclick = () => {
+        const team = settingsTeam;
+        if (!team) return;
+        el("agreementSettingsModal").close();
+        saveSnapshotFile("team", team.uuid, team.title || "Untitled organization");
+      };
+      el("deleteTeamBtn").onclick = () => {
+        const team = settingsTeam;
+        if (!team) return;
+        const kind = team.is_organization ? "organization" : "team";
+        const label = team.is_organization ? "Organization" : "Team";
         confirmAction(
-          "Delete this team?",
-          "This removes the team and all of its sections and clauses, " +
+          `Delete this ${kind}?`,
+          `This removes the ${kind} and all of its sections and clauses, ` +
             "and stops sharing it. This cannot be undone.",
           () => {
             el("agreementSettingsModal").close();
             return run(
               (request) =>
-                request("/api/cockpit/agreement/agreements/delete", {
-                  agreement_uuid: agreement.uuid,
+                request("/api/cockpit/team/teams/delete", {
+                  team_uuid: team.uuid,
                 }),
-              "Team deleted",
+              `${label} deleted`,
+            );
+          },
+        );
+      };
+      el("cancelFlowSettingsBtn").onclick = () => el("flowSettingsModal").close();
+      el("saveFlowSnapshotBtn").onclick = () => {
+        const process = settingsFlow;
+        if (!process) return;
+        el("flowSettingsModal").close();
+        saveSnapshotFile("flow", process.uuid, process.title || "Untitled flow");
+      };
+      el("deleteFlowBtn").onclick = () => {
+        const process = settingsFlow;
+        if (!process) return;
+        const leaving = !process.can_delete;
+        confirmAction(
+          leaving ? "Leave this flow?" : "Delete this flow?",
+          leaving
+            ? "This removes the shared flow from your Cockpit. The creator keeps it."
+            : "This removes the flow, its workflow history and its agenda, and stops sharing it. This cannot be undone.",
+          () => {
+            el("flowSettingsModal").close();
+            return run(
+              (request) => request(leaving
+                ? "/api/cockpit/flow/processes/leave"
+                : "/api/cockpit/flow/processes/delete", {
+                process_uuid: process.uuid,
+              }),
+              leaving ? "Flow removed" : "Flow deleted",
             );
           },
         );
@@ -1331,7 +1432,7 @@
         );
       });
 
-      const addNew = el("cockpitHeaderControls").content.querySelector(".bob-add-new");
+      const addNew = el("cockpitHeaderControls").content.querySelector("#addNewBtn");
 
       SovereignShell.mount({
         container: el("shell"),
@@ -1342,11 +1443,12 @@
           const app = state?.selected_topic?.application_id;
           if (app === "team") {
             return {
-              topicKey: "agreement_uuid",
-              create: "/api/cockpit/agreement/agenda/create",
-              delete: "/api/cockpit/agreement/agenda/delete",
-              setPriority: "/api/cockpit/agreement/agenda/set_priority",
-              move: "/api/cockpit/agreement/agenda/move",
+              topicKey: "team_uuid",
+              create: "/api/cockpit/team/agenda/create",
+              delete: "/api/cockpit/team/agenda/delete",
+              update: "/api/cockpit/team/agenda/update",
+              setPriority: "/api/cockpit/team/agenda/set_priority",
+              move: "/api/cockpit/team/agenda/move",
             };
           }
           if (app === "initiative") {
@@ -1354,6 +1456,7 @@
               topicKey: "board_uuid",
               create: "/api/cockpit/kanban/agenda/create",
               delete: "/api/cockpit/kanban/agenda/delete",
+              update: "/api/cockpit/kanban/agenda/update",
               setPriority: "/api/cockpit/kanban/agenda/set_priority",
               move: "/api/cockpit/kanban/agenda/move",
             };
@@ -1363,6 +1466,7 @@
               topicKey: "process_uuid",
               create: "/api/cockpit/flow/agenda/create",
               delete: "/api/cockpit/flow/agenda/delete",
+              update: "/api/cockpit/flow/agenda/update",
               setPriority: "/api/cockpit/flow/agenda/set_priority",
               move: "/api/cockpit/flow/agenda/move",
             };
@@ -1375,6 +1479,12 @@
             : null,
         autoAdoptLabels: AUTO_ADOPT_LABELS,
         autoAdoptDescriptions: AUTO_ADOPT_DESCRIPTIONS,
+        // Reacting from the pane is offered only where the Cockpit has routes
+        // to honour it. It carries a board's decisions; a team's or a
+        // process's are settled in that application, so their divergences stay
+        // shown here and answered there.
+        canReact: () => state?.selected_topic?.application_id === "initiative",
+        reactNode: (uuid, choice) => applyReaction(uuid, choice),
         sessionView,
         onChanged: () => load(),
       });
@@ -1383,95 +1493,170 @@
       // "+ Add new" drops a menu of the topic-creating applications this host
       // actually has - the cockpit routes to each application's create flow
       // rather than creating anything itself. The board flow keeps its
-      // template modal; a new agreement appears as a tile, and you stay here
+      // template modal; a new team appears as a tile, and you stay here
       // to keep adding, exactly as creating a board leaves you here.
+      function clearSnapshotImport(applicationId, select, file, status) {
+        snapshotImports[applicationId] = null;
+        file.value = "";
+        status.textContent = "";
+        select.disabled = false;
+        SovereignUI.refreshSelect(select);
+      }
+
+      function bindSnapshotLoader(applicationId, buttonId, fileId, statusId, nameId, selectId) {
+        const button = el(buttonId);
+        const file = el(fileId);
+        const status = el(statusId);
+        const name = el(nameId);
+        const select = el(selectId);
+        button.onclick = () => {
+          file.value = "";
+          file.click();
+        };
+        file.onchange = async () => {
+          const chosen = file.files?.[0];
+          if (!chosen) return;
+          try {
+            if (chosen.size > 50 * 1024 * 1024) {
+              throw new Error("Snapshot file is too large.");
+            }
+            const snapshot = JSON.parse(await chosen.text());
+            if (
+              snapshot?.format !== "s-protocol.item-snapshot" ||
+              snapshot?.format_version !== 1 ||
+              snapshot?.item_type !== applicationId ||
+              typeof snapshot?.content !== "object" ||
+              snapshot.content === null
+            ) {
+              throw new Error(`This file does not contain a compatible ${applicationId} snapshot.`);
+            }
+            snapshotImports[applicationId] = snapshot;
+            status.textContent = `Loaded: ${snapshot.name || chosen.name}`;
+            select.disabled = true;
+            if (!name.value.trim() && snapshot.source_name) name.value = snapshot.source_name;
+            SovereignUI.refreshSelect(select);
+          } catch (error) {
+            clearSnapshotImport(applicationId, select, file, status);
+            showToast(error instanceof SyntaxError ? "Snapshot file is not valid JSON" : error.message, true);
+          }
+        };
+      }
+
+      bindSnapshotLoader(
+        "initiative", "loadBoardSnapshotBtn", "boardSnapshotFile",
+        "boardSnapshotFileStatus", "newBoardName", "newBoardTemplate",
+      );
+      bindSnapshotLoader(
+        "team", "loadTeamSnapshotBtn", "teamSnapshotFile",
+        "teamSnapshotFileStatus", "newTeamName", "newTeamTemplate",
+      );
+      bindSnapshotLoader(
+        "flow", "loadFlowSnapshotBtn", "flowSnapshotFile",
+        "flowSnapshotFileStatus", "newFlowName", "newFlowTemplate",
+      );
+
       function openNewBoardModal() {
-        el("newBoardName").value = "Untitled initiative";
+        el("newBoardName").value = "";
         const select = el("newBoardTemplate");
-        select.replaceChildren();
-        const empty = document.createElement("option");
-        empty.value = "";
-        empty.textContent = "Start empty";
-        select.append(empty);
-        for (const board of state.boards || []) {
-          const opt = document.createElement("option");
-          opt.value = board.uuid;
-          opt.textContent = board.name;
-          select.append(opt);
-        }
+        SovereignUI.selectOptions(
+          select,
+          (state.boards || []).map((board) => ({
+            value: board.uuid,
+            label: board.name,
+            group: "Current initiatives",
+            dataset: {source: "current"},
+          })),
+          {emptyLabel: "Start empty", value: ""},
+        );
+        select.options[0].dataset.source = "blank";
+        clearSnapshotImport(
+          "initiative", select, el("boardSnapshotFile"), el("boardSnapshotFileStatus"),
+        );
         el("newBoardModal").showModal();
       }
 
-      // Copying an agreement is choosing where a new one starts, so it lives
+      // Copying a team is choosing where a new one starts, so it lives
       // in the flow that makes one - the same modal shape a new board uses.
-      // An agreement copied this way arrives with the text and the roles and
+      // A team copied this way arrives with the text and the roles and
       // nobody in it, which is what a template is.
-      function openNewAgreementModal() {
-        el("newAgreementName").value = "Untitled team";
-        const select = el("newAgreementTemplate");
-        select.replaceChildren();
-        const empty = document.createElement("option");
-        empty.value = "";
-        empty.textContent = "Start empty";
-        select.append(empty);
-        for (const agreement of state.agreements || []) {
-          const opt = document.createElement("option");
-          opt.value = agreement.uuid;
-          opt.textContent = agreement.title || "Untitled team";
-          select.append(opt);
-        }
-        el("newAgreementModal").showModal();
-      }
-
-      function createFlow() {
-        return run(
-          (request) =>
-            request("/api/cockpit/flow/processes/create", {
-              title: "Untitled flow",
-              definition_id: "integrative-election",
-              definition_version: "0.2.0",
-            }),
-          "Flow created",
+      function openNewTeamModal() {
+        el("newTeamName").value = "";
+        const select = el("newTeamTemplate");
+        SovereignUI.selectOptions(
+          select,
+          (state.teams || []).map((team) => ({
+            value: team.uuid,
+            label: team.title || "Untitled team",
+            group: "Current organizations",
+            dataset: {source: "current"},
+          })),
+          {emptyLabel: "Start empty", value: ""},
         );
+        select.options[0].dataset.source = "blank";
+        clearSnapshotImport(
+          "team", select, el("teamSnapshotFile"), el("teamSnapshotFileStatus"),
+        );
+        el("newTeamModal").showModal();
       }
 
-      function closeAddNewMenu() {
-        el("addNewMenu").hidden = true;
+      function openNewFlowModal() {
+        el("newFlowName").value = "";
+        const select = el("newFlowTemplate");
+        SovereignUI.selectOptions(
+          select,
+          (state.flow_templates || []).map((template) => ({
+            value: template.id,
+            label: template.name,
+            group: "Templates",
+            dataset: {
+              version: template.version,
+              source: "template",
+              description: template.description || "",
+            },
+          })),
+          {value: state.flow_templates?.[0]?.id || ""},
+        );
+        const updateDescription = () => {
+          const option = select.selectedOptions[0];
+          el("newFlowTemplateDescription").textContent = option?.dataset.description || "";
+        };
+        select.onchange = updateDescription;
+        clearSnapshotImport(
+          "flow", select, el("flowSnapshotFile"), el("flowSnapshotFileStatus"),
+        );
+        updateDescription();
+        el("newFlowModal").showModal();
       }
 
-      el("addNewBtn").onclick = (event) => {
-        event.stopPropagation();
-        const menu = el("addNewMenu");
-        if (!menu.hidden) {
-          closeAddNewMenu();
-          return;
-        }
-        menu.replaceChildren();
-        for (const item of state.creatable || []) {
-          const choice = document.createElement("button");
-          choice.type = "button";
-          choice.textContent = item.label;
-          choice.onclick = () => {
-            closeAddNewMenu();
-            if (item.application_id === "team") openNewAgreementModal();
-            else if (item.application_id === "flow") createFlow();
+      SovereignUI.actionMenu({
+        button: el("addNewBtn"),
+        align: "end",
+        emptyMessage: "No item type is available",
+        items: () => (state.creatable || []).map((item) => ({
+          label: item.label,
+          onSelect: () => {
+            if (item.application_id === "team") openNewTeamModal();
+            else if (item.application_id === "flow") openNewFlowModal();
             else openNewBoardModal();
-          };
-          menu.append(choice);
-        }
-        menu.hidden = false;
-        setTimeout(() => {
-          document.addEventListener("click", closeAddNewMenu, { once: true });
-        }, 0);
-      };
+          },
+        })),
+      });
 
       el("cancelNewBoardBtn").onclick = () => el("newBoardModal").close();
       el("newBoardForm").addEventListener("submit", (event) => {
         event.preventDefault();
-        const name = el("newBoardName").value || "Kanban Board";
-        const templateUuid = el("newBoardTemplate").value;
+        const name = el("newBoardName").value.trim() || "Untitled initiative";
+        const select = el("newBoardTemplate");
+        const templateUuid = select.value;
+        const snapshot = snapshotImports.initiative;
         el("newBoardModal").close();
         run(async (request) => {
+          if (snapshot) {
+            return request("/api/cockpit/kanban/snapshots/create", {
+              snapshot,
+              name,
+            });
+          }
           if (templateUuid) {
             const result = await request(
               "/api/cockpit/kanban/boards/copy",
@@ -1491,25 +1676,60 @@
         }, "Initiative created");
       });
 
-      el("cancelNewAgreementBtn").onclick = () => el("newAgreementModal").close();
-      el("newAgreementForm").addEventListener("submit", (event) => {
+      el("cancelNewTeamBtn").onclick = () => el("newTeamModal").close();
+      el("newTeamForm").addEventListener("submit", (event) => {
         event.preventDefault();
-        const title = el("newAgreementName").value || "Untitled team";
-        const templateUuid = el("newAgreementTemplate").value;
-        el("newAgreementModal").close();
+        const title = el("newTeamName").value.trim() || "Untitled organization";
+        const select = el("newTeamTemplate");
+        const templateUuid = select.value;
+        const snapshot = snapshotImports.team;
+        el("newTeamModal").close();
         // One request either way: clone takes the title, so unlike a board
         // copy there is nothing to rename afterwards.
         run(
           (request) =>
-            templateUuid
-              ? request("/api/cockpit/agreement/agreements/clone", {
-                  agreement_uuid: templateUuid,
+            snapshot
+              ? request("/api/cockpit/team/snapshots/create", {
+                  snapshot,
                   title,
                 })
-              : request("/api/cockpit/agreement/agreements/create", {
+              : templateUuid
+              ? request("/api/cockpit/team/teams/clone", {
+                  team_uuid: templateUuid,
+                  title,
+                })
+              : request("/api/cockpit/team/teams/create", {
                   title,
                 }),
-          "Team created",
+          "Organization created",
+        );
+      });
+
+      el("cancelNewFlowBtn").onclick = () => el("newFlowModal").close();
+      el("newFlowForm").addEventListener("submit", (event) => {
+        event.preventDefault();
+        const title = el("newFlowName").value.trim() || "Untitled flow";
+        const select = el("newFlowTemplate");
+        const definitionId = select.value;
+        const snapshot = snapshotImports.flow;
+        const definitionVersion = select.selectedOptions[0]?.dataset.version || "";
+        if (!snapshot && (!definitionId || !definitionVersion)) {
+          showToast("Choose a flow template or load a snapshot file", true);
+          return;
+        }
+        el("newFlowModal").close();
+        run(
+          (request) => snapshot
+            ? request("/api/cockpit/flow/snapshots/create", {
+                snapshot,
+                title,
+              })
+            : request("/api/cockpit/flow/processes/create", {
+                title,
+                definition_id: definitionId,
+                definition_version: definitionVersion,
+              }),
+          "Flow created",
         );
       });
 
@@ -1529,7 +1749,7 @@
         if (!topicUuid) return;
         const topic = [
           ...(state.boards || []),
-          ...(state.agreements || []),
+          ...(state.teams || []),
           ...(state.processes || []),
         ].find((entry) => entry.uuid === topicUuid);
         if (topic) await openShareModal(topic);
