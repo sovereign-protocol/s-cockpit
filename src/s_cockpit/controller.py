@@ -104,6 +104,12 @@ def build_routes(logic, runtime) -> list[Route]:
             bool(data.get("rollback_absence")),
         ))
 
+    async def api_drop_topic(request: Request):
+        data = await request.json()
+        return await _mutation_result(
+            runtime, data, lambda: logic.drop_topic(data["topic_uuid"]),
+        )
+
     async def api_delete_board(request: Request):
         data = await request.json()
         return await _mutation_result(
@@ -374,6 +380,7 @@ def build_routes(logic, runtime) -> list[Route]:
               methods=["POST"]),
         Route("/api/cockpit/kanban/rollback", api_rollback_kanban_node,
               methods=["POST"]),
+        Route("/api/cockpit/topics/drop", api_drop_topic, methods=["POST"]),
         Route("/api/cockpit/kanban/boards/delete", api_delete_board,
               methods=["POST"]),
         Route("/api/cockpit/kanban/cards/delete", api_delete_card,

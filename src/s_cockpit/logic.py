@@ -1095,6 +1095,21 @@ class BoardOfBoardsLogic:
             )
         return kanban.accept_peer_node(source_addr, node_uuid, absent)
 
+    def drop_topic(self, topic_uuid: str) -> SessionResult:
+        """Stop holding a topic without destroying it.
+
+        The Cockpit holds everything this client has, so this is where "I do
+        not want this here any more" belongs. It is not a delete: nothing is
+        published, the others keep what they have, and a peer who still
+        publishes it will offer it back. Core refuses while anything here
+        still references the topic, and names how many.
+
+        Deleting stays with the application that owns the topic - the only
+        one that knows who may destroy it - and is unaffected by how many
+        references exist.
+        """
+        return self.session.drop_topic(topic_uuid)
+
     def delete_board(self, board_uuid: str) -> SessionResult:
         kanban = self._kanban()
         return (

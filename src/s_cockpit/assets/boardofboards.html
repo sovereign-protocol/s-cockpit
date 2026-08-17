@@ -43,6 +43,7 @@
         <div id="boardSettingsFields"></div>
         <menu>
           <button type="button" id="saveBoardSnapshotBtn">Save snapshot...</button>
+          <button type="button" id="dropBoardBtn">Stop holding it</button>
           <button type="button" id="deleteBoardSettingsBtn" class="danger">Delete initiative</button>
           <button type="button" id="cancelBoardSettingsBtn">Cancel</button>
           <button type="button" id="saveBoardSettingsBtn" class="primary">Save</button>
@@ -59,6 +60,7 @@
         </p>
         <menu>
           <button type="button" id="saveTeamSnapshotBtn">Save snapshot...</button>
+          <button type="button" id="dropTeamBtn">Stop holding it</button>
           <button type="button" id="deleteTeamBtn" class="danger">Delete team</button>
           <button type="button" id="cancelTeamSettingsBtn">Cancel</button>
         </menu>
@@ -1213,6 +1215,27 @@
         el("boardSettingsModal").close();
         saveSnapshotFile("initiative", board.uuid, board.name || "Untitled initiative");
       };
+      // Dropping is not deleting. Nothing is published and nobody else loses
+      // anything - this client stops holding it, and a peer who still
+      // publishes it will offer it back. Core refuses while something here
+      // still references it, and says how many places do.
+      el("dropBoardBtn").onclick = () => {
+        const board = settingsBoard;
+        if (!board) return;
+        confirmAction(
+          "Stop holding this initiative?",
+          "It leaves this client only. Everybody else keeps theirs, and it "
+          + "comes back if somebody still sharing it offers it again.",
+          () => {
+            el("boardSettingsModal").close();
+            return run(
+              (request) =>
+                request("/api/cockpit/topics/drop", {topic_uuid: board.uuid}),
+              "Initiative dropped",
+            );
+          },
+        );
+      };
       el("deleteBoardSettingsBtn").onclick = () => {
         const board = settingsBoard;
         if (!board) return;
@@ -1237,6 +1260,24 @@
         if (!team) return;
         el("agreementSettingsModal").close();
         saveSnapshotFile("team", team.uuid, team.title || "Untitled organization");
+      };
+      el("dropTeamBtn").onclick = () => {
+        const team = settingsTeam;
+        if (!team) return;
+        const kind = team.is_organization ? "organization" : "team";
+        confirmAction(
+          `Stop holding this ${kind}?`,
+          `It leaves this client only. The other members keep theirs, and `
+          + `it comes back if somebody still sharing it offers it again.`,
+          () => {
+            el("agreementSettingsModal").close();
+            return run(
+              (request) =>
+                request("/api/cockpit/topics/drop", {topic_uuid: team.uuid}),
+              `${team.is_organization ? "Organization" : "Team"} dropped`,
+            );
+          },
+        );
       };
       el("deleteTeamBtn").onclick = () => {
         const team = settingsTeam;

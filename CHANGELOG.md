@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **"Stop holding it" beside Delete**, on an initiative and on a team. The
+  Cockpit holds everything this client has, so this is where "I do not want
+  this here any more" belongs, and it is not a delete: nothing is published,
+  everybody else keeps theirs, and a peer who still publishes it will offer it
+  back. Core refuses while anything here still references the topic and says
+  how many places do. Removing a reference is not offered here and does not
+  belong here — the Cockpit holds no links, so a reference comes off where it
+  was made.
+
 - Agenda counts and Collaboration panes now use Core's verified perspective
   projection while mutations continue to target locally authored items only.
   The staleness window is Core's default rather than a Cockpit declaration;
