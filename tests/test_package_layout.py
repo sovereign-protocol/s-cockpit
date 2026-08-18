@@ -231,9 +231,11 @@ class AssetTests(unittest.TestCase):
         self.assertIn('class="ui-button"', self.cockpit)
         self.assertIn("SovereignUI.actionMenu", self.cockpit)
         self.assertNotIn('id="addNewMenu"', self.cockpit)
-        self.assertIn('content.querySelector("#addNewBtn")', self.cockpit)
-        self.assertIn("SovereignShell.setAppActions(addNew)", self.cockpit)
         self.assertIn("+ Add new…", self.cockpit)
+        # U7: the shell's bar holds no application controls, so this one sits
+        # in the Cockpit's own page beside the tiles it adds to.
+        self.assertNotIn("setAppActions", self.cockpit)
+        self.assertIn('class="bob-toolbar"', self.cockpit)
 
     def test_selection_controls_use_the_shared_native_select_contract(self):
         self.assertIn("SovereignUI.selectionField", self.cockpit)
@@ -241,16 +243,26 @@ class AssetTests(unittest.TestCase):
         self.assertIn("SovereignUI.selectOptions", self.cockpit)
         self.assertIn('class="ui-select"', self.cockpit)
 
-    def test_cross_application_links_name_the_target_asset_prefix(self):
-        self.assertIn("/apps/initiative?board=", self.cockpit)
-        self.assertIn("/apps/flow?process_uuid=", self.cockpit)
+    def test_cross_application_links_ask_the_shell_for_the_route(self):
+        # A tile opens another application's topic without naming its route:
+        # the shell composes that from what the host reports is running, so
+        # an application deactivated here loses its links instead of keeping
+        # ones that go nowhere.
+        for application_id in ("initiative", "team", "flow"):
+            self.assertIn(
+                f'SovereignShell.topicHref("{application_id}"', self.cockpit,
+            )
+        for route in ("/apps/initiative?", "/apps/flow?", "/apps/team?"):
+            self.assertNotIn(route, self.cockpit)
 
     def test_flow_tiles_have_template_creation_and_owner_deletion_controls(self):
-        self.assertIn('id="newFlowModal"', self.cockpit)
-        self.assertIn('id="newFlowName"', self.cockpit)
-        self.assertIn('id="newFlowTemplate"', self.cockpit)
-        self.assertIn("state.flow_templates", self.cockpit)
-        self.assertIn("/api/cockpit/flow/processes/create", self.cockpit)
+        # Making one is the shell's dialog over Core's routing, and which
+        # workflows there are is S-Flow's answer - neither the list nor the
+        # rule that a process must have one is restated here.
+        self.assertIn("SovereignShell.openNewTopicDialog", self.cockpit)
+        self.assertIn("/api/cockpit/topics/create", self.cockpit)
+        self.assertNotIn("state.flow_templates", self.cockpit)
+        self.assertNotIn("/api/cockpit/flow/processes/create", self.cockpit)
         self.assertIn("/api/cockpit/flow/processes/delete", self.cockpit)
         self.assertIn("/api/cockpit/flow/processes/leave", self.cockpit)
         self.assertIn("process.can_delete", self.cockpit)
@@ -261,23 +273,26 @@ class AssetTests(unittest.TestCase):
         self.assertIn(".s-snapshot", self.cockpit)
         self.assertIn("showSaveFilePicker", self.cockpit)
         self.assertNotIn('accept: {"application/json": [".s-snapshot"]}', self.cockpit)
-        self.assertIn("Load snapshot file...", self.cockpit)
+        # Loading one is the shell's dialog, and every kind accepts the
+        # snapshot of its own application - so no kind loses the offer, and
+        # a fourth gets it without a line here.
+        self.assertIn("snapshotType: kind.application_id", self.cockpit)
+        self.assertIn("/api/cockpit/topics/create", self.cockpit)
         for application in ("kanban", "team", "flow"):
-            for action in ("export", "create"):
-                self.assertIn(
-                    f"/api/cockpit/{application}/snapshots/{action}",
+            self.assertIn(
+                f"/api/cockpit/{application}/snapshots/export", self.cockpit,
+            )
+            for gone in ("create", "delete"):
+                self.assertNotIn(
+                    f"/api/cockpit/{application}/snapshots/{gone}",
                     self.cockpit,
                 )
-            self.assertNotIn(
-                f"/api/cockpit/{application}/snapshots/delete",
-                self.cockpit,
-            )
 
     def test_root_team_creation_and_expansion_use_organization_wording(self):
-        self.assertIn("<h2>New Organization</h2>", self.cockpit)
-        self.assertIn('placeholder="Untitled organization"', self.cockpit)
-        self.assertNotIn('value="Untitled organization"', self.cockpit)
-        self.assertIn('"Organization created"', self.cockpit)
+        # "Organization" is S-Team's own word for a root team, registered
+        # with Core beside the rest of what making one needs. This page
+        # reports whatever came back rather than deciding the word.
+        self.assertIn("`${kind.noun} created`", self.cockpit)
         self.assertIn(
             'team.is_organization ? "Organization" : "Team"',
             self.cockpit,
@@ -319,9 +334,17 @@ class AssetTests(unittest.TestCase):
                 self.cockpit,
             )
 
-    def test_creation_name_defaults_are_placeholders(self):
+    def test_creation_asks_core_what_can_be_made_and_the_shell_how(self):
+        # Every noun, every template list and every create route was written
+        # out here three times. Core answers the first two from what each
+        # application registered, the shell owns the dialog, and one route
+        # makes any of them - so this page names no kind at all.
+        self.assertIn("noun: kind.noun", self.cockpit)
+        self.assertIn("templateRequired: kind.template_required", self.cockpit)
+        self.assertIn("state.creatable", self.cockpit)
+        for noun in ("Initiative", "Organization", "Flow"):
+            self.assertNotIn(f'noun: "{noun}"', self.cockpit)
         for default in ("Untitled initiative", "Untitled organization", "Untitled flow"):
-            self.assertIn(f'placeholder="{default}"', self.cockpit)
             self.assertNotIn(f'value="{default}"', self.cockpit)
 
     def test_cockpit_uses_the_shared_optimistic_session_view(self):

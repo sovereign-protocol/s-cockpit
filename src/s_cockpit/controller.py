@@ -173,18 +173,17 @@ def build_routes(logic, runtime) -> list[Route]:
             data["board_uuid"], data.get("mode", "always"),
         ))
 
-    async def api_create_board(request: Request):
+    # One route for making a topic of any kind. There were eight - a create,
+    # a copy and a from-snapshot per application - and which of the three a
+    # request meant was decided in the browser.
+    async def api_create_topic(request: Request):
         data = await request.json()
-        return await _mutation_result(
-            runtime, data,
-            lambda: logic.create_board(data.get("name", "Kanban Board")),
-        )
-
-    async def api_copy_board(request: Request):
-        data = await request.json()
-        return await _mutation_result(
-            runtime, data, lambda: logic.copy_board(data["board_uuid"]),
-        )
+        return await _mutation_result(runtime, data, lambda: logic.create_topic(
+            data.get("application_id", ""),
+            data.get("title", ""),
+            data.get("template", ""),
+            data.get("snapshot"),
+        ))
 
     async def api_rename_board(request: Request):
         data = await request.json()
@@ -198,27 +197,6 @@ def build_routes(logic, runtime) -> list[Route]:
             data["board_uuid"], data.get("name", ""), data.get("description", ""),
         ))
 
-    async def api_create_board_from_snapshot(request: Request):
-        data = await request.json()
-        return await _mutation_result(runtime, data, lambda: logic.create_board_from_snapshot(
-            data.get("snapshot"), data.get("name", ""),
-        ))
-
-    async def api_create_team(request: Request):
-        data = await request.json()
-        return await _mutation_result(
-            runtime, data,
-            lambda: logic.create_team(data.get("title", "")),
-        )
-
-    async def api_clone_team(request: Request):
-        data = await request.json()
-        return await _mutation_result(
-            runtime, data, lambda: logic.clone_team(
-                data["team_uuid"], data.get("title"),
-            ),
-        )
-
     async def api_delete_team(request: Request):
         data = await request.json()
         return await _mutation_result(
@@ -229,12 +207,6 @@ def build_routes(logic, runtime) -> list[Route]:
         data = await request.json()
         return _query_result(logic.export_team_snapshot(
             data["team_uuid"], data.get("name", ""), data.get("description", ""),
-        ))
-
-    async def api_create_team_from_snapshot(request: Request):
-        data = await request.json()
-        return await _mutation_result(runtime, data, lambda: logic.create_team_from_snapshot(
-            data.get("snapshot"), data.get("title", ""),
         ))
 
     async def api_create_team_agenda(request: Request):
@@ -274,16 +246,6 @@ def build_routes(logic, runtime) -> list[Route]:
             data["item_uuid"], int(data.get("index", 0)),
         ))
 
-    async def api_create_flow_process(request: Request):
-        data = await request.json()
-        return await _mutation_result(
-            runtime, data, lambda: logic.create_flow_process(
-                data.get("title", "Untitled process"),
-                data.get("definition_id", "integrative-election"),
-                data.get("definition_version", "0.2.0"),
-            ),
-        )
-
     async def api_delete_flow_process(request: Request):
         data = await request.json()
         return await _mutation_result(
@@ -302,12 +264,6 @@ def build_routes(logic, runtime) -> list[Route]:
         data = await request.json()
         return _query_result(logic.export_flow_snapshot(
             data["process_uuid"], data.get("name", ""), data.get("description", ""),
-        ))
-
-    async def api_create_flow_from_snapshot(request: Request):
-        data = await request.json()
-        return await _mutation_result(runtime, data, lambda: logic.create_flow_from_snapshot(
-            data.get("snapshot"), data.get("title", ""),
         ))
 
     async def api_create_flow_agenda(request: Request):
@@ -399,25 +355,15 @@ def build_routes(logic, runtime) -> list[Route]:
               api_move_kanban_agenda, methods=["POST"]),
         Route("/api/cockpit/kanban/auto_adopt",
               api_set_kanban_auto_adopt, methods=["POST"]),
-        Route("/api/cockpit/kanban/boards/create", api_create_board,
-              methods=["POST"]),
-        Route("/api/cockpit/kanban/boards/copy", api_copy_board,
+        Route("/api/cockpit/topics/create", api_create_topic,
               methods=["POST"]),
         Route("/api/cockpit/kanban/boards/rename", api_rename_board,
               methods=["POST"]),
         Route("/api/cockpit/kanban/snapshots/export", api_export_board_snapshot,
               methods=["POST"]),
-        Route("/api/cockpit/kanban/snapshots/create", api_create_board_from_snapshot,
-              methods=["POST"]),
-        Route("/api/cockpit/team/teams/create",
-              api_create_team, methods=["POST"]),
-        Route("/api/cockpit/team/teams/clone",
-              api_clone_team, methods=["POST"]),
         Route("/api/cockpit/team/teams/delete",
               api_delete_team, methods=["POST"]),
         Route("/api/cockpit/team/snapshots/export", api_export_team_snapshot,
-              methods=["POST"]),
-        Route("/api/cockpit/team/snapshots/create", api_create_team_from_snapshot,
               methods=["POST"]),
         Route("/api/cockpit/team/agenda/create",
               api_create_team_agenda, methods=["POST"]),
@@ -429,15 +375,11 @@ def build_routes(logic, runtime) -> list[Route]:
               api_prioritize_team_agenda, methods=["POST"]),
         Route("/api/cockpit/team/agenda/move",
               api_move_team_agenda, methods=["POST"]),
-        Route("/api/cockpit/flow/processes/create",
-              api_create_flow_process, methods=["POST"]),
         Route("/api/cockpit/flow/processes/delete",
               api_delete_flow_process, methods=["POST"]),
         Route("/api/cockpit/flow/processes/leave",
               api_leave_flow_process, methods=["POST"]),
         Route("/api/cockpit/flow/snapshots/export", api_export_flow_snapshot,
-              methods=["POST"]),
-        Route("/api/cockpit/flow/snapshots/create", api_create_flow_from_snapshot,
               methods=["POST"]),
         Route("/api/cockpit/flow/agenda/create",
               api_create_flow_agenda, methods=["POST"]),

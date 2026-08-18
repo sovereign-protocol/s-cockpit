@@ -138,12 +138,6 @@ class BoardOfBoardsLogic:
             summaries.append(summary)
         return summaries
 
-    def _flow_templates(self) -> list[dict]:
-        flow = self._flow()
-        if flow is None or not callable(getattr(flow, "templates", None)):
-            return []
-        return [dict(item) for item in flow.templates()]
-
     def _team_summaries(
         self, network_by_topic: dict[str, dict] | None = None,
     ) -> list[dict]:
@@ -453,23 +447,12 @@ class BoardOfBoardsLogic:
         # supplied explicitly by composite_response after Session is released.
         network_by_topic = network_by_topic or {}
         kanban = self._kanban()
-        # Which topic-creating applications this host can offer in the
-        # "+ Add new" menu - the cockpit itself creates neither, it only
-        # routes to whichever facade is present.
-        creatable = [
-            {"application_id": INITIATIVE_APPLICATION_ID, "label": "Initiative"},
-        ]
-        if self._team() is not None:
-            creatable.append(
-                {"application_id": TEAM_APPLICATION_ID, "label": "Organization"}
-            )
-        if self._flow() is not None:
-            creatable.append(
-                {
-                    "application_id": FLOW_APPLICATION_ID,
-                    "label": "Flow",
-                }
-            )
+        # What the "+ Add new" menu offers, and what each one starts from.
+        # Core answers it from what each application registered about its own
+        # topics: this had a list of nouns, a per-kind template lookup and
+        # three create paths, all of which were restating what the owning
+        # application already knew.
+        creatable = self.session.topic_kinds()
         teams = self._team_summaries(network_by_topic)
         processes = self._flow_summaries()
         if kanban is None:
@@ -478,7 +461,6 @@ class BoardOfBoardsLogic:
                 "boards": [],
                 "teams": teams,
                 "processes": processes,
-                "flow_templates": self._flow_templates(),
                 "tile_order": self._normalized_tile_order(
                     [], teams, processes,
                 ),
@@ -531,7 +513,6 @@ class BoardOfBoardsLogic:
             "boards": boards_out,
             "teams": teams,
             "processes": processes,
-            "flow_templates": self._flow_templates(),
             "tile_order": self._normalized_tile_order(
                 boards_out, teams, processes,
             ),
@@ -1189,18 +1170,20 @@ class BoardOfBoardsLogic:
             if kanban else SessionResult("error", reason=self._kanban_facade_error)
         )
 
-    def create_board(self, name: str) -> SessionResult:
-        kanban = self._kanban()
-        return (
-            kanban.create_board(name)
-            if kanban else SessionResult("error", reason=self._kanban_facade_error)
-        )
+    def create_topic(
+        self, application_id: str, title: str,
+        template: str = "", snapshot: dict | None = None,
+    ) -> SessionResult:
+        """Make one topic of whatever kind, wherever it came from.
 
-    def copy_board(self, board_uuid: str) -> SessionResult:
-        kanban = self._kanban()
-        return (
-            kanban.copy_board(board_uuid)
-            if kanban else SessionResult("error", reason=self._kanban_facade_error)
+        This had six methods - a create, a copy-and-rename and a
+        from-snapshot for each of three applications - each reaching a
+        facade to say what that application already says about itself.
+        Core routes it now, and what starts from nothing, from a template
+        or from a file is the owning application's own answer.
+        """
+        return self.session.create_application_topic(
+            application_id, title, template, snapshot,
         )
 
     def export_board_snapshot(
@@ -1213,42 +1196,11 @@ class BoardOfBoardsLogic:
             if callable(export) else SessionResult("error", reason="Snapshots are not supported")
         )
 
-    def create_board_from_snapshot(
-        self, document: dict, name: str = "",
-    ) -> SessionResult:
-        kanban = self._kanban()
-        create = getattr(kanban, "create_from_snapshot", None) if kanban else None
-        return (
-            create(document, name)
-            if callable(create) else SessionResult("error", reason="Snapshots are not supported")
-        )
-
     def rename_board(self, board_uuid: str, name: str) -> SessionResult:
         kanban = self._kanban()
         return (
             kanban.rename_board(board_uuid, name)
             if kanban else SessionResult("error", reason=self._kanban_facade_error)
-        )
-
-    def create_team(self, title: str) -> SessionResult:
-        team = self._team()
-        return (
-            team.create_team(title)
-            if team else SessionResult(
-                "error", reason="Team application is not active",
-            )
-        )
-
-    def clone_team(
-        self, team_uuid: str, title: str | None = None,
-    ) -> SessionResult:
-        """Start a new team from an existing one, as a board copy does."""
-        team = self._team()
-        return (
-            team.clone_team(team_uuid, title)
-            if team else SessionResult(
-                "error", reason="Team application is not active",
-            )
         )
 
     def export_team_snapshot(
@@ -1259,16 +1211,6 @@ class BoardOfBoardsLogic:
         return (
             export(team_uuid, name, description)
             if callable(export) else SessionResult("error", reason="Snapshots are not supported")
-        )
-
-    def create_team_from_snapshot(
-        self, document: dict, title: str = "",
-    ) -> SessionResult:
-        team = self._team()
-        create = getattr(team, "create_from_snapshot", None) if team else None
-        return (
-            create(document, title)
-            if callable(create) else SessionResult("error", reason="Snapshots are not supported")
         )
 
     def delete_team(self, team_uuid: str) -> SessionResult:
@@ -1334,22 +1276,6 @@ class BoardOfBoardsLogic:
             )
         )
 
-    def create_flow_process(
-        self,
-        title: str,
-        definition_id: str = "integrative-election",
-        definition_version: str = "0.2.0",
-    ) -> SessionResult:
-        flow = self._flow()
-        return (
-            flow.create_process(
-                title, definition_id, definition_version,
-            )
-            if flow else SessionResult(
-                "error", reason="S-Flow application is not active",
-            )
-        )
-
     def export_flow_snapshot(
         self, process_uuid: str, name: str = "", description: str = "",
     ) -> SessionResult:
@@ -1358,16 +1284,6 @@ class BoardOfBoardsLogic:
         return (
             export(process_uuid, name, description)
             if callable(export) else SessionResult("error", reason="Snapshots are not supported")
-        )
-
-    def create_flow_from_snapshot(
-        self, document: dict, title: str = "",
-    ) -> SessionResult:
-        flow = self._flow()
-        create = getattr(flow, "create_from_snapshot", None) if flow else None
-        return (
-            create(document, title)
-            if callable(create) else SessionResult("error", reason="Snapshots are not supported")
         )
 
     def delete_flow_process(self, process_uuid: str) -> SessionResult:

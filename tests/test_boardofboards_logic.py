@@ -9,6 +9,7 @@ try:
     from s_initiative.logic import InitiativeLogic
 except ImportError:  # pragma: no cover - depends on what is installed
     InitiativeFacade = InitiativeLogic = None
+from sovereign import ApplicationRegistration, SessionResult
 from sovereign.protocol import ProtocolNode
 
 
@@ -284,7 +285,63 @@ class _StubFlowFacade:
         return self.session.move_agenda_item(item_uuid, index)
 
 
+def register_stub_application(session, application_id, root_type, noun, stub):
+    """Stand in for a producer the way a real one stands: registered.
+
+    Making a topic goes through Core's registry now, so a stub that only
+    answered a facade lookup could be read from and not created in - which
+    is not what an application absent from this host looks like.
+    """
+    def create_topic(title, template, snapshot):
+        if application_id == "flow":
+            chosen = next(
+                (item for item in stub.templates()
+                 if item["id"] == str(template or "")),
+                None,
+            )
+            if not chosen:
+                return SessionResult(
+                    "error", reason="choose a workflow to start from",
+                )
+            return stub.create_process(title, chosen["id"], chosen["version"])
+        return (
+            stub.clone_team(template, title) if template
+            else stub.create_team(title)
+        )
+
+    session.register_application(ApplicationRegistration(
+        application_id,
+        frozenset({root_type}),
+        lambda: [],
+        session.accept_topic_invitation,
+        assignment_scoped=True,
+        mount_invitation=True,
+        topic_noun=noun,
+        template_required=application_id == "flow",
+        list_templates=lambda: (
+            [
+                {
+                    "value": item["id"],
+                    "name": item["name"],
+                    "description": item.get("description", ""),
+                }
+                for item in stub.templates()
+            ]
+            if application_id == "flow" else []
+        ),
+        create_topic=create_topic,
+    ))
+
+
 def cockpit(runtime, team=None, flow=None):
+    if team is not None:
+        register_stub_application(
+            runtime.session, "team", "team", "Organization", team,
+        )
+    if flow is not None:
+        register_stub_application(
+            runtime.session, "flow", "flow_process", "Flow", flow,
+        )
     return BoardOfBoardsLogic(
         runtime.session,
         runtime.config,
@@ -869,8 +926,11 @@ class BoardOfBoardsLogicTests(unittest.TestCase):
         self.assertFalse(summary["expanded"])
         self.assertEqual(summary["sections"], [])
         self.assertIn(
-            {"application_id": "team", "label": "Organization"},
-            bob.summary_payload()["creatable"],
+            ("team", "Organization"),
+            [
+                (kind["application_id"], kind["noun"])
+                for kind in bob.summary_payload()["creatable"]
+            ],
         )
 
     def test_cockpit_preserves_team_s_contextual_organization_projection(self):
@@ -915,8 +975,8 @@ class BoardOfBoardsLogicTests(unittest.TestCase):
         bob = cockpit(runtime, team, flow)
         team_uuid = team.create("Working team")
         team_item = team.create_agenda_item(team_uuid, "Team wording").value
-        process = bob.create_flow_process(
-            "Election", "integrative-election", "0.2.0",
+        process = bob.create_topic(
+            "flow", "Election", "integrative-election",
         ).value
         flow_item = flow.create_agenda_item(process, "Flow wording").value
 
@@ -943,8 +1003,8 @@ class BoardOfBoardsLogicTests(unittest.TestCase):
         flow = _StubFlowFacade(runtime.session)
         bob = cockpit(runtime, flow=flow)
 
-        created = bob.create_flow_process(
-            "Elect secretary", "integrative-election", "0.2.0",
+        created = bob.create_topic(
+            "flow", "Elect secretary", "integrative-election",
         )
         process_uuid = created.value
         agenda = bob.create_flow_agenda_item(
@@ -958,12 +1018,17 @@ class BoardOfBoardsLogicTests(unittest.TestCase):
         self.assertEqual(selected.status, "ok")
         self.assertEqual(payload["selected_topic"]["uuid"], process_uuid)
         self.assertIn(process_uuid, payload["tile_order"])
-        self.assertIn(
-            {"application_id": "flow", "label": "Flow"},
-            payload["creatable"],
+        # What a flow starts from arrives with the kind rather than in a
+        # payload field of its own: the dialog asks one question about one
+        # kind, and every kind answers it the same way.
+        flow_kind = next(
+            kind for kind in payload["creatable"]
+            if kind["application_id"] == "flow"
         )
+        self.assertEqual(flow_kind["noun"], "Flow")
+        self.assertTrue(flow_kind["template_required"])
         self.assertEqual(
-            [item["id"] for item in payload["flow_templates"]],
+            [item["value"] for item in flow_kind["templates"]],
             ["integrative-election", "minimal-consent"],
         )
         tile = payload["processes"][0]

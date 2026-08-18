@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+- **"+ Add new…" came out of the shell's bar.** The bar holds nothing of an
+  application's now, so the button sits above the tiles it adds to. The
+  navigation row the shell draws under a topic name is deliberately absent
+  here: the Cockpit already shows every topic you hold, so a line offering a
+  few of them — and offering the Cockpit itself — would be the second
+  navigation mesh Core has refused since U3. Auto-adopt wording is inherited
+  from Core rather than copied. See `DESIGN_UI_CONSISTENCY.md` U7.
+
+- **Eight create routes became one, and six create methods became none.**
+  `/api/cockpit/topics/create` makes a topic of any kind through Core's
+  registry; the per-application create, copy and from-snapshot routes and
+  their logic methods are gone, along with the list of nouns and the flow
+  template lookup — `session.topic_kinds()` answers all three. Adding a
+  fourth topic-creating application needs no change here at all.
+
+- **Tiles ask the shell where another application's topic is.**
+  `SovereignShell.topicHref(applicationId, uuid)` replaces three hardcoded
+  routes, so an application deactivated on this host loses its links instead
+  of keeping ones that go nowhere.
+
+- **Three new-item dialogs became one.** New Initiative, New Organization and
+  New Flow were the same form three times, differing in the noun and in
+  whether a template was required. They are three calls to the shell's
+  `openNewTopicDialog` now, each passing its noun, what there is to start
+  from, and the create call. Nothing changes about what any of them makes.
+
 - **"Stop holding it" beside Delete**, on an initiative and on a team. The
   Cockpit holds everything this client has, so this is where "I do not want
   this here any more" belongs, and it is not a delete: nothing is published,
