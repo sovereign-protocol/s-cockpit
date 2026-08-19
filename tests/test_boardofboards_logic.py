@@ -22,14 +22,14 @@ requires_initiative = unittest.skipIf(
 
 
 class _FacadeLookup:
-    def __init__(self, kanban, team=None, flow=None):
-        self.kanban = kanban
+    def __init__(self, initiative, team=None, flow=None):
+        self.initiative = initiative
         self.team = team
         self.flow = flow
 
     def find(self, application_id, facade_api_version):
-        if application_id == "initiative" and facade_api_version == 1:
-            return self.kanban
+        if application_id == "initiative" and facade_api_version == 2:
+            return self.initiative
         if application_id == "team" and facade_api_version == 2:
             return self.team
         if application_id == "flow" and facade_api_version == 1:
@@ -351,10 +351,10 @@ def cockpit(runtime, team=None, flow=None):
     )
 
 
-class CockpitWithoutKanbanTests(unittest.TestCase):
+class CockpitWithoutInitiativeTests(unittest.TestCase):
     """Runs whether or not S-Initiative is installed - that is the point."""
 
-    def test_without_kanban_facade_is_empty_and_reports_source_unavailable(self):
+    def test_without_initiative_facade_is_empty_and_reports_source_unavailable(self):
         directory = tempfile.TemporaryDirectory()
         config = app_server.load_config()
         config.update({
@@ -368,10 +368,10 @@ class CockpitWithoutKanbanTests(unittest.TestCase):
 
         payload = bob.summary_payload()
 
-        self.assertEqual(payload["boards"], [])
+        self.assertEqual(payload["initiatives"], [])
         self.assertFalse(payload["sources"]["initiative"]["available"])
         self.assertIn("not active", payload["sources"]["initiative"]["reason"])
-        result = bob.reorder_boards([])
+        result = bob.reorder_initiatives([])
         self.assertEqual(result.status, "error")
 
 @requires_initiative
@@ -390,7 +390,7 @@ class BoardOfBoardsLogicTests(unittest.TestCase):
             network == {} for network in team.observed_networks
         ))
 
-    def test_application_host_supplies_live_kanban_facade(self):
+    def test_application_host_supplies_live_initiative_facade(self):
         directory = tempfile.TemporaryDirectory()
         # Not load_config(): it searches the working directory for
         # `boardofboards_config.json`, so running this suite from the
@@ -402,57 +402,57 @@ class BoardOfBoardsLogicTests(unittest.TestCase):
         config["storage_file"] = str(Path(directory.name) / "cockpit.json")
         runtime = app_server.create_runtime(8498, config)
         runtime._test_tmp = directory
-        kanban = runtime.host.instances["initiative"].logic
-        kanban.ensure_board()
+        initiative_logic = runtime.host.instances["initiative"].logic
+        initiative_logic.ensure_initiative()
 
         self.assertEqual(runtime.host.primary_instance.manifest.application_id,
                          "cockpit")
-        self.assertEqual(len(runtime.logic.summary_payload()["boards"]), 1)
+        self.assertEqual(len(runtime.logic.summary_payload()["initiatives"]), 1)
         self.assertTrue(
             runtime.logic.summary_payload()["sources"]["initiative"]["available"],
         )
 
     def test_summary_lists_all_boards_collapsed_by_default(self):
         runtime = self.runtime(8501)
-        kanban: InitiativeLogic = runtime.logic
+        initiative_logic: InitiativeLogic = runtime.logic
         bob = cockpit(runtime)
 
-        board_a = kanban.ensure_board()
-        board_b_uuid = kanban.create_board("Board B").value
+        board_a = initiative_logic.ensure_initiative()
+        board_b_uuid = initiative_logic.create_initiative("Board B").value
 
         payload = bob.summary_payload()
-        self.assertEqual({item["uuid"] for item in payload["boards"]}, {board_a.uuid, board_b_uuid})
-        self.assertTrue(all(not item["expanded"] for item in payload["boards"]))
+        self.assertEqual({item["uuid"] for item in payload["initiatives"]}, {board_a.uuid, board_b_uuid})
+        self.assertTrue(all(not item["expanded"] for item in payload["initiatives"]))
 
-        bob.pick_board(board_a.uuid, [], [])
+        bob.pick_initiative(board_a.uuid, [], [])
         payload = bob.summary_payload()
-        expanded = [item for item in payload["boards"] if item["expanded"]]
+        expanded = [item for item in payload["initiatives"] if item["expanded"]]
         self.assertEqual([b["uuid"] for b in expanded], [board_a.uuid])
 
     def test_tiles_and_selected_collaboration_are_separate_payloads(self):
         runtime = self.runtime(8532)
-        kanban: InitiativeLogic = runtime.logic
+        initiative_logic: InitiativeLogic = runtime.logic
         bob = cockpit(runtime)
-        board = kanban.ensure_board()
-        runtime.session.create_agenda_item(board.uuid, "Discuss timing")
+        initiative = initiative_logic.ensure_initiative()
+        runtime.session.create_agenda_item(initiative.uuid, "Discuss timing")
 
         tiles = bob.tiles_payload()
         context = bob.context_payload()
 
         self.assertNotIn("agenda_items", tiles)
-        self.assertEqual(context["selected_topic"]["uuid"], board.uuid)
+        self.assertEqual(context["selected_topic"]["uuid"], initiative.uuid)
         self.assertEqual(len(context["agenda_items"]), 1)
         self.assertIn("agenda_items", bob.summary_payload())
 
     def test_summary_carries_columns_and_settings_for_each_board(self):
         runtime = self.runtime(8511)
-        kanban: InitiativeLogic = runtime.logic
+        initiative_logic: InitiativeLogic = runtime.logic
         bob = cockpit(runtime)
-        board = kanban.ensure_board()
-        todo, doing, done = kanban.columns(board)
+        initiative = initiative_logic.ensure_initiative()
+        todo, doing, done = initiative_logic.columns(initiative)
 
         collapsed = next(
-            item for item in bob.summary_payload()["boards"] if item["uuid"] == board.uuid
+            item for item in bob.summary_payload()["initiatives"] if item["uuid"] == initiative.uuid
         )
         self.assertFalse(collapsed["expanded"])
         self.assertEqual(
@@ -461,10 +461,10 @@ class BoardOfBoardsLogicTests(unittest.TestCase):
         )
         self.assertEqual(collapsed["active_column_uuids"], [])
 
-        bob.pick_board(board.uuid, [doing.uuid], [todo.uuid])
+        bob.pick_initiative(initiative.uuid, [doing.uuid], [todo.uuid])
 
         picked = next(
-            item for item in bob.summary_payload()["boards"] if item["uuid"] == board.uuid
+            item for item in bob.summary_payload()["initiatives"] if item["uuid"] == initiative.uuid
         )
         self.assertTrue(picked["expanded"])
         self.assertEqual(picked["active_column_uuids"], [doing.uuid])
@@ -472,38 +472,38 @@ class BoardOfBoardsLogicTests(unittest.TestCase):
 
     def test_active_and_next_bands_partition_by_mapped_columns(self):
         runtime = self.runtime(8502)
-        kanban: InitiativeLogic = runtime.logic
+        initiative_logic: InitiativeLogic = runtime.logic
         bob = cockpit(runtime)
-        board = kanban.ensure_board()
-        todo, doing, done = kanban.columns(board)
-        my_id = kanban.user_profile().uuid
+        initiative = initiative_logic.ensure_initiative()
+        todo, doing, done = initiative_logic.columns(initiative)
+        my_id = initiative_logic.user_profile().uuid
 
-        next_card = kanban.create_card(todo.uuid, "Next task", "", [my_id]).value
-        active_card = kanban.create_card(doing.uuid, "Active task", "", [my_id]).value
-        kanban.create_card(done.uuid, "Done task", "", [my_id])
+        next_card = initiative_logic.create_card(todo.uuid, "Next task", "", [my_id]).value
+        active_card = initiative_logic.create_card(doing.uuid, "Active task", "", [my_id]).value
+        initiative_logic.create_card(done.uuid, "Done task", "", [my_id])
 
-        bob.pick_board(board.uuid, [doing.uuid], [todo.uuid])
+        bob.pick_initiative(initiative.uuid, [doing.uuid], [todo.uuid])
 
-        summary = bob.summary_payload()["boards"][0]
+        summary = bob.summary_payload()["initiatives"][0]
         self.assertEqual([c["uuid"] for c in summary["active_cards"]], [active_card.uuid])
         self.assertEqual([c["uuid"] for c in summary["next_cards"]], [next_card.uuid])
 
     def test_active_band_includes_all_cards_with_personal_cards_first(self):
         runtime = self.runtime(8513)
-        kanban: InitiativeLogic = runtime.logic
+        initiative_logic: InitiativeLogic = runtime.logic
         bob = cockpit(runtime)
-        board = kanban.ensure_board()
-        todo, doing, done = kanban.columns(board)
-        my_id = kanban.user_profile().uuid
+        initiative = initiative_logic.ensure_initiative()
+        todo, doing, done = initiative_logic.columns(initiative)
+        my_id = initiative_logic.user_profile().uuid
 
-        mine = kanban.create_card(doing.uuid, "Mine", "", [my_id]).value
-        someone_elses = kanban.create_card(
+        mine = initiative_logic.create_card(doing.uuid, "Mine", "", [my_id]).value
+        someone_elses = initiative_logic.create_card(
             doing.uuid, "Someone else's", "", ["other-user-id"],
         ).value
-        unassigned = kanban.create_card(doing.uuid, "Unassigned").value
-        bob.pick_board(board.uuid, [doing.uuid], [])
+        unassigned = initiative_logic.create_card(doing.uuid, "Unassigned").value
+        bob.pick_initiative(initiative.uuid, [doing.uuid], [])
 
-        summary = bob.summary_payload()["boards"][0]
+        summary = bob.summary_payload()["initiatives"][0]
 
         self.assertEqual(
             [c["uuid"] for c in summary["active_cards"]],
@@ -516,19 +516,19 @@ class BoardOfBoardsLogicTests(unittest.TestCase):
 
     def test_owner_cards_sort_before_participant_cards(self):
         runtime = self.runtime(8514)
-        kanban: InitiativeLogic = runtime.logic
+        initiative_logic: InitiativeLogic = runtime.logic
         bob = cockpit(runtime)
-        board = kanban.ensure_board()
-        todo, doing, done = kanban.columns(board)
-        my_id = kanban.user_profile().uuid
+        initiative = initiative_logic.ensure_initiative()
+        todo, doing, done = initiative_logic.columns(initiative)
+        my_id = initiative_logic.user_profile().uuid
 
         # Created in participant-then-owner order, so a correct sort proves
         # it's reordering rather than accidentally preserving creation order.
-        participant_card = kanban.create_card(doing.uuid, "I'm just on it", "", [my_id]).value
-        owner_card = kanban.create_card(doing.uuid, "I own this", "", [my_id], owner=my_id).value
-        bob.pick_board(board.uuid, [doing.uuid], [])
+        participant_card = initiative_logic.create_card(doing.uuid, "I'm just on it", "", [my_id]).value
+        owner_card = initiative_logic.create_card(doing.uuid, "I own this", "", [my_id], owner=my_id).value
+        bob.pick_initiative(initiative.uuid, [doing.uuid], [])
 
-        summary = bob.summary_payload()["boards"][0]
+        summary = bob.summary_payload()["initiatives"][0]
 
         self.assertEqual(
             [(c["uuid"], c["relevance"]) for c in summary["active_cards"]],
@@ -537,16 +537,16 @@ class BoardOfBoardsLogicTests(unittest.TestCase):
 
     def test_card_summary_includes_people_labels(self):
         runtime = self.runtime(8524)
-        kanban: InitiativeLogic = runtime.logic
+        initiative_logic: InitiativeLogic = runtime.logic
         bob = cockpit(runtime)
-        kanban.session.set_identity("Andrea")
-        board = kanban.ensure_board()
-        todo, doing, done = kanban.columns(board)
-        my_id = kanban.user_profile().uuid
-        kanban.create_card(doing.uuid, "Discuss API", "Choose connector shape", [my_id], owner=my_id)
-        bob.pick_board(board.uuid, [doing.uuid], [])
+        initiative_logic.session.set_identity("Andrea")
+        initiative = initiative_logic.ensure_initiative()
+        todo, doing, done = initiative_logic.columns(initiative)
+        my_id = initiative_logic.user_profile().uuid
+        initiative_logic.create_card(doing.uuid, "Discuss API", "Choose connector shape", [my_id], owner=my_id)
+        bob.pick_initiative(initiative.uuid, [doing.uuid], [])
 
-        card = bob.summary_payload()["boards"][0]["active_cards"][0]
+        card = bob.summary_payload()["initiatives"][0]["active_cards"][0]
 
         self.assertEqual(card["description"], "Choose connector shape")
         self.assertEqual(card["owner_label"], "Andrea")
@@ -558,10 +558,10 @@ class BoardOfBoardsLogicTests(unittest.TestCase):
 
     def test_summary_payload_lists_known_people_for_the_card_picker(self):
         runtime = self.runtime(8527)
-        kanban: InitiativeLogic = runtime.logic
+        initiative_logic: InitiativeLogic = runtime.logic
         bob = cockpit(runtime)
-        kanban.session.set_identity("Andrea")
-        my_id = kanban.user_profile().uuid
+        initiative_logic.session.set_identity("Andrea")
+        my_id = initiative_logic.user_profile().uuid
 
         payload = bob.summary_payload()
 
@@ -571,27 +571,27 @@ class BoardOfBoardsLogicTests(unittest.TestCase):
 
     def test_summary_counts_cards_in_discussion(self):
         runtime = self.runtime(8525)
-        kanban: InitiativeLogic = runtime.logic
+        initiative_logic: InitiativeLogic = runtime.logic
         bob = cockpit(runtime)
-        board = kanban.ensure_board()
-        todo, doing, done = kanban.columns(board)
-        my_id = kanban.user_profile().uuid
-        card = kanban.create_card(doing.uuid, "Discuss me", "", [my_id], owner=my_id).value
-        bob.pick_board(board.uuid, [doing.uuid], [])
-        runtime.session.note_indirect_peer_topic("relay:peer", board.uuid)
+        initiative = initiative_logic.ensure_initiative()
+        todo, doing, done = initiative_logic.columns(initiative)
+        my_id = initiative_logic.user_profile().uuid
+        card = initiative_logic.create_card(doing.uuid, "Discuss me", "", [my_id], owner=my_id).value
+        bob.pick_initiative(initiative.uuid, [doing.uuid], [])
+        runtime.session.note_indirect_peer_topic("relay:peer", initiative.uuid)
         runtime.session.apply_peer_subtree(
             "relay:peer",
-            ProtocolNode.from_dict(runtime.session.protocol.index[board.uuid].to_dict()),
+            ProtocolNode.from_dict(runtime.session.protocol.index[initiative.uuid].to_dict()),
             runtime.session.protocol.root.uuid,
         )
 
-        kanban.update_card(card.uuid, "Discuss me locally", "", [my_id], owner=my_id)
+        initiative_logic.update_card(card.uuid, "Discuss me locally", "", [my_id], owner=my_id)
         runtime.session.record_peer_observations(
             "relay:peer",
-            runtime.session.node_revision_map(runtime.session.protocol.index[board.uuid]),
+            runtime.session.node_revision_map(runtime.session.protocol.index[initiative.uuid]),
         )
 
-        summary = bob.summary_payload()["boards"][0]
+        summary = bob.summary_payload()["initiatives"][0]
         self.assertEqual(summary["discussion_count"], 1)
         self.assertEqual(summary["column_count"], 3)
         transition = summary["active_cards"][0]["transition"]
@@ -609,10 +609,10 @@ class BoardOfBoardsLogicTests(unittest.TestCase):
 
     def test_card_perspectives_include_multiple_absent_versions_and_dedupe_forwarding(self):
         runtime = self.runtime(8528)
-        kanban: InitiativeLogic = runtime.logic
+        initiative_logic: InitiativeLogic = runtime.logic
         bob = cockpit(runtime)
-        board = kanban.ensure_board()
-        card = kanban.create_card(kanban.columns(board)[0].uuid, "Task").value
+        initiative = initiative_logic.ensure_initiative()
+        card = initiative_logic.create_card(initiative_logic.columns(initiative)[0].uuid, "Task").value
         revision_a = "revision-a"
 
         perspectives = bob._card_perspectives(card, {"events": [
@@ -627,22 +627,22 @@ class BoardOfBoardsLogicTests(unittest.TestCase):
 
     def test_selected_flag_is_summary_only_and_toggles(self):
         runtime = self.runtime(8503)
-        kanban: InitiativeLogic = runtime.logic
+        initiative_logic: InitiativeLogic = runtime.logic
         bob = cockpit(runtime)
-        board = kanban.ensure_board()
-        todo, doing, done = kanban.columns(board)
-        my_id = kanban.user_profile().uuid
-        card = kanban.create_card(doing.uuid, "Task", "", [my_id]).value
-        bob.pick_board(board.uuid, [doing.uuid], [])
+        initiative = initiative_logic.ensure_initiative()
+        todo, doing, done = initiative_logic.columns(initiative)
+        my_id = initiative_logic.user_profile().uuid
+        card = initiative_logic.create_card(doing.uuid, "Task", "", [my_id]).value
+        bob.pick_initiative(initiative.uuid, [doing.uuid], [])
 
-        before = bob.summary_payload()["boards"][0]["active_cards"][0]
+        before = bob.summary_payload()["initiatives"][0]["active_cards"][0]
         self.assertFalse(before["selected"])
 
         result = bob.toggle_selected(card.uuid)
         self.assertEqual(result.status, "ok")
         self.assertTrue(result.value)
 
-        after = bob.summary_payload()["boards"][0]["active_cards"][0]
+        after = bob.summary_payload()["initiatives"][0]["active_cards"][0]
         self.assertTrue(after["selected"])
         self.assertNotIn("selected", runtime.session.protocol.index[card.uuid].data)
 
@@ -651,205 +651,171 @@ class BoardOfBoardsLogicTests(unittest.TestCase):
 
     def test_unpick_board_collapses_and_leaves_the_real_board_untouched(self):
         runtime = self.runtime(8504)
-        kanban: InitiativeLogic = runtime.logic
+        initiative_logic: InitiativeLogic = runtime.logic
         bob = cockpit(runtime)
-        board = kanban.ensure_board()
-        bob.pick_board(board.uuid, [], [])
+        initiative = initiative_logic.ensure_initiative()
+        bob.pick_initiative(initiative.uuid, [], [])
 
-        bob.unpick_board(board.uuid)
+        bob.unpick_initiative(initiative.uuid)
 
-        summary = bob.summary_payload()["boards"][0]
-        self.assertEqual(summary["uuid"], board.uuid)
+        summary = bob.summary_payload()["initiatives"][0]
+        self.assertEqual(summary["uuid"], initiative.uuid)
         self.assertFalse(summary["expanded"])
-        self.assertIn(board.uuid, runtime.session.protocol.index)
+        self.assertIn(initiative.uuid, runtime.session.protocol.index)
 
     def test_reorder_boards_keeps_unmentioned_boards_appended(self):
         runtime = self.runtime(8505)
-        kanban: InitiativeLogic = runtime.logic
+        initiative_logic: InitiativeLogic = runtime.logic
         bob = cockpit(runtime)
-        board_a = kanban.ensure_board()
-        board_b_uuid = kanban.create_board("Board B").value
-        board_c_uuid = kanban.create_board("Board C").value
-        bob.pick_board(board_a.uuid, [], [])
-        bob.pick_board(board_b_uuid, [], [])
-        bob.pick_board(board_c_uuid, [], [])
+        board_a = initiative_logic.ensure_initiative()
+        board_b_uuid = initiative_logic.create_initiative("Board B").value
+        board_c_uuid = initiative_logic.create_initiative("Board C").value
+        bob.pick_initiative(board_a.uuid, [], [])
+        bob.pick_initiative(board_b_uuid, [], [])
+        bob.pick_initiative(board_c_uuid, [], [])
 
-        bob.reorder_boards([board_c_uuid, board_a.uuid])
+        bob.reorder_initiatives([board_c_uuid, board_a.uuid])
 
         payload = bob.summary_payload()
         self.assertEqual(
-            [b["uuid"] for b in payload["boards"]],
+            [b["uuid"] for b in payload["initiatives"]],
             [board_c_uuid, board_a.uuid, board_b_uuid],
         )
 
     def test_reorder_boards_also_works_on_the_collapsed_group(self):
-        # reorder_boards used to only ever touch expanded boards (and force
-        # expanded=True on whatever it reordered) - collapsed board tiles
+        # reorder_initiatives used to only ever touch expanded initiatives (and force
+        # expanded=True on whatever it reordered) - collapsed initiative tiles
         # had no way to be reordered at all. It should now reorder whichever
         # group the given uuids belong to, and leave expanded/collapsed
         # untouched either way.
         runtime = self.runtime(8526)
-        kanban: InitiativeLogic = runtime.logic
+        initiative_logic: InitiativeLogic = runtime.logic
         bob = cockpit(runtime)
-        board_a = kanban.ensure_board()
-        board_b_uuid = kanban.create_board("Board B").value
-        board_c_uuid = kanban.create_board("Board C").value
-        bob.pick_board(board_a.uuid, [], [])  # expanded; must stay unaffected
+        board_a = initiative_logic.ensure_initiative()
+        board_b_uuid = initiative_logic.create_initiative("Board B").value
+        board_c_uuid = initiative_logic.create_initiative("Board C").value
+        bob.pick_initiative(board_a.uuid, [], [])  # expanded; must stay unaffected
 
-        bob.reorder_boards([board_c_uuid, board_b_uuid])
+        bob.reorder_initiatives([board_c_uuid, board_b_uuid])
 
         payload = bob.summary_payload()
-        by_uuid = {b["uuid"]: b for b in payload["boards"]}
+        by_uuid = {b["uuid"]: b for b in payload["initiatives"]}
         self.assertTrue(by_uuid[board_a.uuid]["expanded"])
         self.assertFalse(by_uuid[board_c_uuid]["expanded"])
         self.assertFalse(by_uuid[board_b_uuid]["expanded"])
-        collapsed_order = [b["uuid"] for b in payload["boards"] if not b["expanded"]]
+        collapsed_order = [b["uuid"] for b in payload["initiatives"] if not b["expanded"]]
         self.assertEqual(collapsed_order, [board_c_uuid, board_b_uuid])
 
     def test_boards_and_teams_share_one_tile_order(self):
         runtime = self.runtime(8531)
-        kanban: InitiativeLogic = runtime.logic
+        initiative_logic: InitiativeLogic = runtime.logic
         team = _StubTeamFacade(runtime.session)
         bob = cockpit(runtime, team)
-        board = kanban.ensure_board()
+        initiative = initiative_logic.ensure_initiative()
         team_uuid = team.create("Working team")
 
         initial = bob.summary_payload()
         self.assertEqual(
-            set(initial["tile_order"]), {board.uuid, team_uuid},
+            set(initial["tile_order"]), {initiative.uuid, team_uuid},
         )
 
-        result = bob.reorder_tiles([team_uuid, board.uuid])
+        result = bob.reorder_tiles([team_uuid, initiative.uuid])
 
         self.assertEqual(result.status, "ok")
         self.assertEqual(
             bob.summary_payload()["tile_order"],
-            [team_uuid, board.uuid],
+            [team_uuid, initiative.uuid],
         )
 
         duplicate = bob.reorder_tiles([
-            team_uuid, team_uuid, board.uuid,
+            team_uuid, team_uuid, initiative.uuid,
         ])
         invalid = bob.reorder_tiles("not-a-list")
 
         self.assertEqual(
-            duplicate.value, [team_uuid, board.uuid],
+            duplicate.value, [team_uuid, initiative.uuid],
         )
         self.assertEqual(invalid.status, "error")
 
     def test_summary_drops_a_picked_board_that_no_longer_exists(self):
         runtime = self.runtime(8506)
-        kanban: InitiativeLogic = runtime.logic
+        initiative_logic: InitiativeLogic = runtime.logic
         bob = cockpit(runtime)
-        board_a = kanban.ensure_board()
-        board_b_uuid = kanban.create_board("Board B").value
-        bob.pick_board(board_a.uuid, [], [])
-        bob.pick_board(board_b_uuid, [], [])
+        board_a = initiative_logic.ensure_initiative()
+        board_b_uuid = initiative_logic.create_initiative("Board B").value
+        bob.pick_initiative(board_a.uuid, [], [])
+        bob.pick_initiative(board_b_uuid, [], [])
 
-        kanban.delete_board(board_b_uuid)
+        initiative_logic.delete_initiative(board_b_uuid)
 
         payload = bob.summary_payload()
-        self.assertEqual([b["uuid"] for b in payload["boards"]], [board_a.uuid])
+        self.assertEqual([b["uuid"] for b in payload["initiatives"]], [board_a.uuid])
 
-    def test_card_edits_via_kanban_logic_are_reflected_in_next_summary(self):
+    def test_card_edits_via_initiative_logic_are_reflected_in_next_summary(self):
         runtime = self.runtime(8507)
-        kanban: InitiativeLogic = runtime.logic
+        initiative_logic: InitiativeLogic = runtime.logic
         bob = cockpit(runtime)
-        board = kanban.ensure_board()
-        todo, doing, done = kanban.columns(board)
-        my_id = kanban.user_profile().uuid
-        card = kanban.create_card(todo.uuid, "Task", "", [my_id]).value
-        bob.pick_board(board.uuid, [doing.uuid], [todo.uuid])
+        initiative = initiative_logic.ensure_initiative()
+        todo, doing, done = initiative_logic.columns(initiative)
+        my_id = initiative_logic.user_profile().uuid
+        card = initiative_logic.create_card(todo.uuid, "Task", "", [my_id]).value
+        bob.pick_initiative(initiative.uuid, [doing.uuid], [todo.uuid])
 
-        kanban.update_card(card.uuid, "Renamed", "New desc", [my_id])
-        summary = bob.summary_payload()["boards"][0]
+        initiative_logic.update_card(card.uuid, "Renamed", "New desc", [my_id])
+        summary = bob.summary_payload()["initiatives"][0]
         self.assertEqual(summary["next_cards"][0]["name"], "Renamed")
 
-        kanban.move_card(card.uuid, doing.uuid, 0)
-        summary = bob.summary_payload()["boards"][0]
+        initiative_logic.move_card(card.uuid, doing.uuid, 0)
+        summary = bob.summary_payload()["initiatives"][0]
         self.assertEqual(summary["next_cards"], [])
         self.assertEqual(summary["active_cards"][0]["uuid"], card.uuid)
 
     def test_pick_board_ignores_column_uuids_from_a_different_board(self):
         runtime = self.runtime(8508)
-        kanban: InitiativeLogic = runtime.logic
+        initiative_logic: InitiativeLogic = runtime.logic
         bob = cockpit(runtime)
-        board_a = kanban.ensure_board()
-        board_b_uuid = kanban.create_board("Board B").value
+        board_a = initiative_logic.ensure_initiative()
+        board_b_uuid = initiative_logic.create_initiative("Board B").value
         board_b = runtime.session.protocol.index[board_b_uuid]
-        foreign_column = kanban.columns(board_b)[0]
+        foreign_column = initiative_logic.columns(board_b)[0]
 
-        bob.pick_board(board_a.uuid, [foreign_column.uuid], [])
+        bob.pick_initiative(board_a.uuid, [foreign_column.uuid], [])
 
-        summary = bob.summary_payload()["boards"][0]
+        summary = bob.summary_payload()["initiatives"][0]
         self.assertEqual(summary["active_column_uuids"], [])
 
     def test_pick_board_does_not_allow_same_column_as_active_and_next(self):
         runtime = self.runtime(8512)
-        kanban: InitiativeLogic = runtime.logic
+        initiative_logic: InitiativeLogic = runtime.logic
         bob = cockpit(runtime)
-        board = kanban.ensure_board()
-        todo = kanban.columns(board)[0]
+        initiative = initiative_logic.ensure_initiative()
+        todo = initiative_logic.columns(initiative)[0]
 
-        bob.pick_board(board.uuid, [todo.uuid], [todo.uuid])
+        bob.pick_initiative(initiative.uuid, [todo.uuid], [todo.uuid])
 
-        summary = bob.summary_payload()["boards"][0]
+        summary = bob.summary_payload()["initiatives"][0]
         self.assertEqual(summary["active_column_uuids"], [todo.uuid])
         self.assertEqual(summary["next_column_uuids"], [])
 
     def test_collapse_keeps_column_mapping(self):
         runtime = self.runtime(8515)
-        kanban: InitiativeLogic = runtime.logic
+        initiative_logic: InitiativeLogic = runtime.logic
         bob = cockpit(runtime)
-        board = kanban.ensure_board()
-        todo, doing, done = kanban.columns(board)
-        bob.update_board_settings(
-            board.uuid,
+        initiative = initiative_logic.ensure_initiative()
+        todo, doing, done = initiative_logic.columns(initiative)
+        bob.update_initiative_settings(
+            initiative.uuid,
             expanded=True,
             active_column_uuid=doing.uuid,
             next_column_uuid=todo.uuid,
         )
 
-        bob.update_board_settings(board.uuid, expanded=False)
+        bob.update_initiative_settings(initiative.uuid, expanded=False)
 
-        summary = bob.summary_payload()["boards"][0]
+        summary = bob.summary_payload()["initiatives"][0]
         self.assertFalse(summary["expanded"])
         self.assertEqual(summary["active_column_uuid"], doing.uuid)
         self.assertEqual(summary["next_column_uuid"], todo.uuid)
-
-    def test_legacy_bindings_do_not_overwrite_new_column_settings(self):
-        runtime = self.runtime(8535)
-        kanban: InitiativeLogic = runtime.logic
-        board = kanban.ensure_board()
-        todo, doing, _done = kanban.columns(board)
-        with runtime.session.lock:
-            metadata = runtime.session.application_metadata(
-                "cockpit",
-            )
-            metadata["picked_boards"] = [board.uuid]
-            metadata["board_bindings"] = {
-                board.uuid: {
-                    "active_column_uuids": [],
-                    "next_column_uuids": [],
-                },
-            }
-        bob = cockpit(runtime)
-
-        bob.update_board_settings(
-            board.uuid,
-            active_column_uuid=doing.uuid,
-            next_column_uuid=todo.uuid,
-        )
-        summary = bob.summary_payload()["boards"][0]
-
-        self.assertEqual(summary["active_column_uuid"], doing.uuid)
-        self.assertEqual(summary["next_column_uuid"], todo.uuid)
-        with runtime.session.lock:
-            metadata = runtime.session.application_metadata(
-                "cockpit",
-            )
-            self.assertNotIn("picked_boards", metadata)
-            self.assertNotIn("board_bindings", metadata)
 
     def test_toggle_selected_rejects_unknown_card(self):
         runtime = self.runtime(8509)
@@ -861,25 +827,25 @@ class BoardOfBoardsLogicTests(unittest.TestCase):
 
     def test_objective_field_defaults_to_empty_and_is_settable(self):
         runtime = self.runtime(8510)
-        kanban: InitiativeLogic = runtime.logic
+        initiative_logic: InitiativeLogic = runtime.logic
         bob = cockpit(runtime)
-        board = kanban.ensure_board()
-        bob.pick_board(board.uuid, [], [])
+        initiative = initiative_logic.ensure_initiative()
+        bob.pick_initiative(initiative.uuid, [], [])
 
-        self.assertEqual(bob.summary_payload()["boards"][0]["objective"], "")
+        self.assertEqual(bob.summary_payload()["initiatives"][0]["objective"], "")
 
-        kanban.set_board_objective(board.uuid, "Ship the thing")
+        initiative_logic.set_initiative_objective(initiative.uuid, "Ship the thing")
         self.assertEqual(
-            bob.summary_payload()["boards"][0]["objective"],
+            bob.summary_payload()["initiatives"][0]["objective"],
             "Ship the thing",
         )
 
     def test_selected_topic_drives_cockpit_collaboration_context(self):
         runtime = self.runtime(8522)
-        kanban: InitiativeLogic = runtime.logic
+        initiative_logic: InitiativeLogic = runtime.logic
         bob = cockpit(runtime)
-        first = kanban.ensure_board()
-        second_uuid = kanban.create_board("Second").value
+        first = initiative_logic.ensure_initiative()
+        second_uuid = initiative_logic.create_initiative("Second").value
 
         initial = bob.summary_payload()
         self.assertEqual(initial["selected_topic"]["uuid"], first.uuid)
@@ -889,26 +855,26 @@ class BoardOfBoardsLogicTests(unittest.TestCase):
         selected = bob.summary_payload()
         self.assertEqual(selected["selected_topic"]["uuid"], second_uuid)
         self.assertTrue(next(
-            item for item in selected["boards"] if item["uuid"] == second_uuid
+            item for item in selected["initiatives"] if item["uuid"] == second_uuid
         )["selected_topic"])
 
     def test_board_tile_counts_its_agenda_items(self):
         # The tile shows divergences and agenda items side by side, so the
-        # agenda count has to be per board, not just for the selected one.
+        # agenda count has to be per initiative, not just for the selected one.
         runtime = self.runtime(8523)
-        kanban: InitiativeLogic = runtime.logic
+        initiative_logic: InitiativeLogic = runtime.logic
         bob = cockpit(runtime)
-        board = kanban.ensure_board()
-        other_uuid = kanban.create_board("Second").value
-        runtime.session.create_agenda_item(board.uuid, "Discuss scope")
-        runtime.session.create_agenda_item(board.uuid, "Discuss dates")
+        initiative = initiative_logic.ensure_initiative()
+        other_uuid = initiative_logic.create_initiative("Second").value
+        runtime.session.create_agenda_item(initiative.uuid, "Discuss scope")
+        runtime.session.create_agenda_item(initiative.uuid, "Discuss dates")
 
         counts = {
             item["uuid"]: item["agenda_count"]
-            for item in bob.summary_payload()["boards"]
+            for item in bob.summary_payload()["initiatives"]
         }
 
-        self.assertEqual(counts[board.uuid], 2)
+        self.assertEqual(counts[initiative.uuid], 2)
         self.assertEqual(counts[other_uuid], 0)
 
     def test_team_tile_reports_agenda_count_and_starts_collapsed(self):

@@ -34,8 +34,8 @@ Issues = "https://github.com/sovereign-protocol/s-cockpit/issues"
 # it back would make an optional dependency mandatory to test, and would block
 # this repository's CI on S-Initiative existing at an index.
 test = ["pytest>=8,<10"]
-# Adds the tests that exercise the Kanban facade.
-test-kanban = ["pytest>=8,<10", "sovereign-initiative>=0.1.0a1,<0.2"]
+# Adds the tests that exercise the Initiative facade.
+test-initiative = ["pytest>=8,<10", "sovereign-initiative>=0.1.0a1,<0.2"]
 # The window only. Everything else works headless, so this stays optional and
 # the launcher explains the install when it is missing.
 desktop = ["pywebview>=5,<6"]

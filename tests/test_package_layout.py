@@ -12,6 +12,7 @@ hard dependency on one of them by accident.
 
 import ast
 import importlib.metadata
+import re
 import unittest
 from importlib.resources import files
 from pathlib import Path
@@ -73,7 +74,7 @@ class PackagingTests(unittest.TestCase):
             controller,
         )
 
-    def test_distribution_has_no_kanban_dependency(self):
+    def test_distribution_has_no_initiative_dependency(self):
         # A5: S-Initiative is an optional, late-bound producer. The moment it
         # appears in `dependencies`, installing the Cockpit drags it in and
         # the optionality the architecture rests on is gone.
@@ -226,6 +227,32 @@ class AssetTests(unittest.TestCase):
             for pattern in ('href = `/?', 'href="/?', "href='/?"):
                 self.assertNotIn(pattern, line, f"boardofboards.html:{number}")
 
+    def test_the_page_only_reads_payload_keys_the_logic_writes(self):
+        # The tile families are a contract with the page and are not the node
+        # types behind them - "initiatives" here carries `initiative` roots the
+        # way "teams" carries teams. S-Team renamed keys and types together
+        # once and the page silently read `undefined`, so the keys are checked
+        # from the page's side rather than only from the logic's.
+        source = (ROOT / "src" / "s_cockpit" / "logic.py").read_text(
+            encoding="utf-8",
+        )
+        written = set()
+        for node in ast.walk(ast.parse(source)):
+            if not isinstance(node, ast.FunctionDef):
+                continue
+            if node.name != "tiles_payload":
+                continue
+            for inner in ast.walk(node):
+                if isinstance(inner, ast.Return) and isinstance(inner.value, ast.Dict):
+                    written |= {
+                        key.value for key in inner.value.keys
+                        if isinstance(key, ast.Constant)
+                    }
+        self.assertLessEqual({"initiatives", "teams", "processes"}, written)
+        read = set(re.findall(r"state\??\.([a-z_]+)", self.cockpit))
+        self.assertTrue(read)
+        self.assertEqual(read - written, set())
+
     def test_people_and_multi_type_add_use_the_shared_ui_primitives(self):
         self.assertIn("SovereignUI.avatar", self.cockpit)
         self.assertIn('class="ui-button"', self.cockpit)
@@ -278,7 +305,7 @@ class AssetTests(unittest.TestCase):
         # a fourth gets it without a line here.
         self.assertIn("snapshotType: kind.application_id", self.cockpit)
         self.assertIn("/api/cockpit/topics/create", self.cockpit)
-        for application in ("kanban", "team", "flow"):
+        for application in ("initiative", "team", "flow"):
             self.assertIn(
                 f"/api/cockpit/{application}/snapshots/export", self.cockpit,
             )
@@ -299,7 +326,7 @@ class AssetTests(unittest.TestCase):
         )
 
     def test_assets_do_not_call_producer_controller_namespaces(self):
-        self.assertNotIn("/api/kanban", self.cockpit)
+        self.assertNotIn("/api/initiative", self.cockpit)
         self.assertNotIn("/api/team", self.cockpit)
         self.assertNotIn("/api/flow", self.cockpit)
 
@@ -315,7 +342,7 @@ class AssetTests(unittest.TestCase):
         self.assertIn('count.className = "bob-band-count"', self.cockpit)
         self.assertIn("heading.append(title, count, sources)", self.cockpit)
         self.assertNotIn("involving you", self.cockpit)
-        status_start = self.cockpit.index("function boardStatus(board)")
+        status_start = self.cockpit.index("function initiativeStatus(initiative)")
         status_end = self.cockpit.index("function statItem", status_start)
         status_source = self.cockpit[status_start:status_end]
         self.assertNotIn("active_cards", status_source)
@@ -328,7 +355,7 @@ class AssetTests(unittest.TestCase):
     def test_objectives_and_agenda_text_use_the_shared_editor(self):
         self.assertIn("SovereignUI.editableText", self.cockpit)
         self.assertNotIn('div.contentEditable = "true"', self.cockpit)
-        for application in ("team", "kanban", "flow"):
+        for application in ("team", "initiative", "flow"):
             self.assertIn(
                 f'update: "/api/cockpit/{application}/agenda/update"',
                 self.cockpit,

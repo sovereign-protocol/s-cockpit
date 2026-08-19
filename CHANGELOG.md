@@ -2,6 +2,38 @@
 
 ## Unreleased
 
+- **The tile family is `initiatives`, beside `teams` and `processes`.**
+  `board_settings`, `update_board_settings`, `pick_board`, `reorder_boards`
+  and `board_uuid` follow S-Initiative's rename of everything that means the
+  topic; the routes are `/api/cockpit/initiatives/*`. Board of Boards keeps
+  its name, and so do the `bob-board*` classes — those draw a tile, and team
+  and flow tiles use them too, so they name no topic at all.
+
+- **The application is named `initiative` wherever it is named.** The route
+  segment is `/api/cockpit/initiative/*`, the facade accessor is
+  `_initiative()` with the `self.initiative` property beside `_team()` and
+  `_flow()`, and the forwarding methods are `react_to_initiative_node`,
+  `create_initiative_agenda_item` and `set_initiative_auto_adopt`. This
+  segment had been left as `kanban` on the reading that it names the facade
+  the call is forwarded to. It does not: Core's facade registry is keyed by
+  `application_id` alone, that key is `initiative`, and `_kanban()` looked it
+  up under `INITIATIVE_APPLICATION_ID` — so `kanban` named nothing that
+  exists. The page's `APP_ICONS` key and the `test-kanban` extra (now
+  `test-initiative`, with the CI job that installs it) moved with it.
+  `kanban_column` and `kanban_card` are untouched: a Kanban board is still
+  what organises an initiative.
+
+- **The initiative facade is required at version 2**, matching S-Initiative's
+  bump. The two must be released together.
+
+- **Per-tile display settings reset once.** `board_settings` became
+  `initiative_settings` in local application metadata, so expand/collapse,
+  band column mappings and tile order start fresh. Local-only, never shared.
+
+- **The page's tile keys are asserted from the page's side**, by the same
+  source scan S-Initiative now carries: `tiles_payload` is parsed for the keys
+  it writes and every `state.<key>` the page reads must be one of them.
+
 - **"+ Add new…" came out of the shell's bar.** The bar holds nothing of an
   application's now, so the button sits above the tiles it adds to. The
   navigation row the shell draws under a topic name is deliberately absent

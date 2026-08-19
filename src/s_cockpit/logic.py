@@ -2,29 +2,29 @@
 Board of Boards - portfolio summary view.
 
 Functionality:
-  A live channel into all of the user's own kanban boards, not a copy.
-  Expanded boards are shown first with their objective, an Active
-  band (cards from columns mapped as "active" for that board) and a Next
-  band (cards from columns mapped as "next"). Collapsed boards follow as
+  A live channel into all of the user's own initiatives, not a copy.
+  Expanded initiatives are shown first with their objective, an Active
+  band (cards from columns mapped as "active" for that initiative) and a Next
+  band (cards from columns mapped as "next"). Collapsed initiatives follow as
   compact overview tiles. Card edits, moves, and reactions go through the
-  versioned Kanban facade. This module owns its controller namespace,
-  per-board display settings, column band mappings, and the summary-only
-  "selected" flag (never part of the real board data).
+  versioned Initiative facade. This module owns its controller namespace,
+  per-initiative display settings, column band mappings, and the summary-only
+  "selected" flag (never part of the real initiative data).
 
   Each band shows every card in its mapped column. Cards owned by the local
   user come first, followed by cards they participate in, then all others.
 
 Contract:
   Local-only config/state lives in
-  session.application_metadata("Board of Boards"):
-    board_settings: {
-      board_uuid: {expanded: bool, active_column_uuid, next_column_uuid, order}
+  session.application_metadata("cockpit"):
+    initiative_settings: {
+      initiative_uuid: {expanded: bool, active_column_uuid, next_column_uuid, order}
     }
     selected_card_uuids: [card_uuid, ...]
   Persisted and restored through Session's metadata envelope.
 
 Used API:
-  The optional, versioned Kanban application facade and session.Session.
+  The optional, versioned Initiative application facade and session.Session.
 """
 
 from __future__ import annotations
@@ -55,7 +55,7 @@ def _session_transaction(method):
 COCKPIT_APPLICATION_ID = "cockpit"
 APP_METADATA_KEY = COCKPIT_APPLICATION_ID
 INITIATIVE_APPLICATION_ID = "initiative"
-INITIATIVE_FACADE_API_VERSION = 1
+INITIATIVE_FACADE_API_VERSION = 2
 TEAM_APPLICATION_ID = "team"
 TEAM_FACADE_API_VERSION = 2
 FLOW_APPLICATION_ID = "flow"
@@ -72,41 +72,40 @@ class BoardOfBoardsLogic:
         self.session = session
         self.config = config or {}
         self.facades = facades
-        self._kanban_facade_error = ""
+        self._initiative_facade_error = ""
         with self.session.lock:
             metadata = self.session.application_metadata(APP_METADATA_KEY)
-            stored = metadata.get("board_settings", {})
+            stored = metadata.get("initiative_settings", {})
             settings = (
                 stored if isinstance(stored, dict) else {}
             )
-            self._migrate_old_metadata(settings, metadata)
-            metadata["board_settings"] = settings
+            metadata["initiative_settings"] = settings
 
-    def _kanban(self):
+    def _initiative(self):
         if self.facades is None:
-            self._kanban_facade_error = "Kanban application is not active"
+            self._initiative_facade_error = "Initiative application is not active"
             return None
         try:
             facade = self.facades.find(
                 INITIATIVE_APPLICATION_ID, INITIATIVE_FACADE_API_VERSION,
             )
         except ValueError as exc:
-            self._kanban_facade_error = str(exc)
+            self._initiative_facade_error = str(exc)
             return None
-        self._kanban_facade_error = (
-            "" if facade is not None else "Kanban application is not active"
+        self._initiative_facade_error = (
+            "" if facade is not None else "Initiative application is not active"
         )
         return facade
 
     @property
-    def kanban(self):
-        facade = self._kanban()
+    def initiative(self):
+        facade = self._initiative()
         if facade is None:
-            raise RuntimeError(self._kanban_facade_error)
+            raise RuntimeError(self._initiative_facade_error)
         return facade
 
     def _team(self):
-        # Optional, like the Kanban facade: the cockpit shows team tiles
+        # Optional, like the Initiative facade: the cockpit shows team tiles
         # only when the team application is active in this host.
         if self.facades is None:
             return None
@@ -308,12 +307,12 @@ class BoardOfBoardsLogic:
 
     def _normalized_tile_order(
         self,
-        boards: list[dict],
+        initiatives: list[dict],
         teams: list[dict],
         processes: list[dict] | None = None,
     ) -> list[str]:
         candidates = [
-            *(item["uuid"] for item in boards),
+            *(item["uuid"] for item in initiatives),
             *(item["uuid"] for item in teams),
             *(item["uuid"] for item in (processes or [])),
         ]
@@ -333,8 +332,8 @@ class BoardOfBoardsLogic:
         if not isinstance(tile_uuids, list):
             return SessionResult("error", reason="tile_uuids must be a list")
         valid = {
-            *(board.uuid for board in (
-                self._kanban().boards() if self._kanban() else []
+            *(initiative.uuid for initiative in (
+                self._initiative().initiatives() if self._initiative() else []
             )),
             *(node.uuid for node in (
                 self._team().teams() if self._team() else []
@@ -362,7 +361,7 @@ class BoardOfBoardsLogic:
     def select_topic(self, topic_uuid: str) -> SessionResult:
         team = self._team()
         valid = {
-            *(board.uuid for board in (self._kanban().boards() if self._kanban() else [])),
+            *(initiative.uuid for initiative in (self._initiative().initiatives() if self._initiative() else [])),
             *(node.uuid for node in (team.teams() if team else [])),
             *(node.uuid for node in (
                 self._flow().processes() if self._flow() else []
@@ -375,18 +374,18 @@ class BoardOfBoardsLogic:
 
     def _selected_topic(
         self,
-        boards: list[dict],
+        initiatives: list[dict],
         teams: list[dict],
         processes: list[dict] | None = None,
     ) -> dict | None:
         topics = [
             *(
                 {
-                    "uuid": board["uuid"],
-                    "title": board["name"],
+                    "uuid": initiative["uuid"],
+                    "title": initiative["name"],
                     "application_id": INITIATIVE_APPLICATION_ID,
                 }
-                for board in boards
+                for initiative in initiatives
             ),
             *(
                 {
@@ -424,7 +423,7 @@ class BoardOfBoardsLogic:
                 "identity_uuid": self.session.identity.uuid,
             }
         facade = {
-            INITIATIVE_APPLICATION_ID: self._kanban,
+            INITIATIVE_APPLICATION_ID: self._initiative,
             TEAM_APPLICATION_ID: self._team,
             FLOW_APPLICATION_ID: self._flow,
         }.get(selected["application_id"], lambda: None)()
@@ -446,7 +445,7 @@ class BoardOfBoardsLogic:
         # This is an authoritative Session builder. Live observations are
         # supplied explicitly by composite_response after Session is released.
         network_by_topic = network_by_topic or {}
-        kanban = self._kanban()
+        facade = self._initiative()
         # What the "+ Add new" menu offers, and what each one starts from.
         # Core answers it from what each application registered about its own
         # topics: this had a list of nouns, a per-kind template lookup and
@@ -455,10 +454,10 @@ class BoardOfBoardsLogic:
         creatable = self.session.topic_kinds()
         teams = self._team_summaries(network_by_topic)
         processes = self._flow_summaries()
-        if kanban is None:
+        if facade is None:
             selected = self._selected_topic([], teams, processes)
             return {
-                "boards": [],
+                "initiatives": [],
                 "teams": teams,
                 "processes": processes,
                 "tile_order": self._normalized_tile_order(
@@ -471,35 +470,35 @@ class BoardOfBoardsLogic:
                 "sources": {
                     INITIATIVE_APPLICATION_ID: {
                         "available": False,
-                        "reason": self._kanban_facade_error,
+                        "reason": self._initiative_facade_error,
                     },
                 },
             }
-        boards = kanban.boards()
-        settings_by_board = self._normalized_settings(boards)
-        boards_out = [
-            self._board_summary(
-                board,
-                settings_by_board.get(board.uuid, {}),
+        initiatives = facade.initiatives()
+        settings_by_initiative = self._normalized_settings(initiatives)
+        initiatives_out = [
+            self._initiative_summary(
+                initiative,
+                settings_by_initiative.get(initiative.uuid, {}),
                 (
                     None if network_by_topic is None
-                    else network_by_topic.get(board.uuid, {})
+                    else network_by_topic.get(initiative.uuid, {})
                 ),
             )
-            for board in sorted(
-                boards,
-                key=lambda board: (
-                    not settings_by_board.get(board.uuid, {}).get("expanded", False),
-                    int(settings_by_board.get(board.uuid, {}).get("order", 0) or 0),
-                    str(board.data.get("name", "")),
-                    board.created_at,
+            for initiative in sorted(
+                initiatives,
+                key=lambda initiative: (
+                    not settings_by_initiative.get(initiative.uuid, {}).get("expanded", False),
+                    int(settings_by_initiative.get(initiative.uuid, {}).get("order", 0) or 0),
+                    str(initiative.data.get("name", "")),
+                    initiative.created_at,
                 ),
             )
         ]
-        selected = self._selected_topic(boards_out, teams, processes)
-        for board in boards_out:
-            board["selected_topic"] = bool(
-                selected and board["uuid"] == selected["uuid"]
+        selected = self._selected_topic(initiatives_out, teams, processes)
+        for initiative in initiatives_out:
+            initiative["selected_topic"] = bool(
+                selected and initiative["uuid"] == selected["uuid"]
             )
         for team in teams:
             team["selected_topic"] = bool(
@@ -510,19 +509,19 @@ class BoardOfBoardsLogic:
                 selected and process["uuid"] == selected["uuid"]
             )
         return {
-            "boards": boards_out,
+            "initiatives": initiatives_out,
             "teams": teams,
             "processes": processes,
             "tile_order": self._normalized_tile_order(
-                boards_out, teams, processes,
+                initiatives_out, teams, processes,
             ),
             "creatable": creatable,
             # Every peer this session knows about, for the card-edit modal's
-            # owner/members picker - not board-scoped (unlike initiative.html's
-            # picker, which restricts to current board peers) since Overview
-            # spans every board and has no per-board peer topic to filter by.
+            # owner/members picker - not initiative-scoped (unlike initiative.html's
+            # picker, which restricts to current initiative peers) since Overview
+            # spans every initiative and has no per-initiative peer topic to filter by.
             "people": list(self._people_by_uuid().values()),
-            "users": kanban.users(),
+            "users": facade.users(),
             "selected_topic": selected,
             "sources": {INITIATIVE_APPLICATION_ID: {"available": True}},
         }
@@ -535,13 +534,13 @@ class BoardOfBoardsLogic:
     ) -> dict:
         network_by_topic = network_by_topic or {}
         if selected is None:
-            kanban = self._kanban()
-            boards = [
+            facade = self._initiative()
+            initiatives = [
                 {
-                    "uuid": board.uuid,
-                    "name": board.data.get("name", ""),
+                    "uuid": initiative.uuid,
+                    "name": initiative.data.get("name", ""),
                 }
-                for board in (kanban.boards() if kanban else [])
+                for initiative in (facade.initiatives() if facade else [])
             ]
             team = self._team()
             teams = [
@@ -559,7 +558,7 @@ class BoardOfBoardsLogic:
                 }
                 for node in (flow.processes() if flow else [])
             ]
-            selected = self._selected_topic(boards, teams, processes)
+            selected = self._selected_topic(initiatives, teams, processes)
         return {
             "selected_topic": selected,
             **self._collaboration_context(
@@ -615,15 +614,15 @@ class BoardOfBoardsLogic:
         return {"payload": payload, "topics": topics}
 
     def _topic_descriptors(self) -> list[dict]:
-        kanban = self._kanban()
+        facade = self._initiative()
         team = self._team()
         return [
             *(
                 {
-                    "uuid": board.uuid,
+                    "uuid": initiative.uuid,
                     "application_id": INITIATIVE_APPLICATION_ID,
                 }
-                for board in (kanban.boards() if kanban else [])
+                for initiative in (facade.initiatives() if facade else [])
             ),
             *(
                 {
@@ -653,20 +652,20 @@ class BoardOfBoardsLogic:
             item["uuid"]: item["application_id"]
             for item in snapshot.get("topics", [])
         }
-        for board in payload.get("boards", []):
-            topic_uuid = board.get("uuid")
+        for initiative in payload.get("initiatives", []):
+            topic_uuid = initiative.get("uuid")
             grouped = cls._filter_transition_groups(
-                board.pop("_transition_by_node", {}),
+                initiative.pop("_transition_by_node", {}),
                 observations.get(topic_uuid, {}),
                 INITIATIVE_APPLICATION_ID,
             )
-            discussion_nodes = set(board.pop("_discussion_node_uuids", []))
-            board["discussion_count"] = len(
+            discussion_nodes = set(initiative.pop("_discussion_node_uuids", []))
+            initiative["discussion_count"] = len(
                 discussion_nodes.intersection(grouped)
             )
             for card in [
-                *board.get("active_cards", []),
-                *board.get("next_cards", []),
+                *initiative.get("active_cards", []),
+                *initiative.get("next_cards", []),
             ]:
                 transition = grouped.get(card.get("uuid"))
                 card["transition"] = transition
@@ -750,29 +749,29 @@ class BoardOfBoardsLogic:
             return state == "alive"
         return state != "stale"
 
-    def _board_summary(
-        self, board: ProtocolNode, settings: dict,
+    def _initiative_summary(
+        self, initiative: ProtocolNode, settings: dict,
         network: dict | None = None,
     ) -> dict:
-        columns = self.kanban.columns(board)
+        columns = self.initiative.columns(initiative)
         columns_by_uuid = {column.uuid: column for column in columns}
         people_by_uuid = self._people_by_uuid()
-        transition_by_node = self.kanban.transition_by_node(
-            self.kanban.transition_events(board.uuid, network)
+        transition_by_node = self.initiative.transition_by_node(
+            self.initiative.transition_events(initiative.uuid, network)
         )
         active_uuid = settings.get("active_column_uuid")
         next_uuid = settings.get("next_column_uuid")
         active_uuids = [active_uuid] if active_uuid in columns_by_uuid else []
         next_uuids = [next_uuid] if next_uuid in columns_by_uuid and next_uuid != active_uuid else []
         selected = set(self._metadata().get("selected_card_uuids", []))
-        my_id = self.kanban.user_profile().uuid
+        my_id = self.initiative.user_profile().uuid
         card_count = 0
         for column in columns:
-            card_count += len(self.kanban.cards(column))
-        discussion_nodes = self._discussion_card_uuids(board, network)
+            card_count += len(self.initiative.cards(column))
+        discussion_nodes = self._discussion_card_uuids(initiative, network)
         active_cards = []
         for column_uuid in active_uuids:
-            for card in self.kanban.cards(columns_by_uuid[column_uuid]):
+            for card in self.initiative.cards(columns_by_uuid[column_uuid]):
                 relevance = self._relevance(card, my_id)
                 entry = self._card_summary(
                     card,
@@ -785,7 +784,7 @@ class BoardOfBoardsLogic:
                 active_cards.append(entry)
         next_cards = []
         for column_uuid in next_uuids:
-            for card in self.kanban.cards(columns_by_uuid[column_uuid]):
+            for card in self.initiative.cards(columns_by_uuid[column_uuid]):
                 relevance = self._relevance(card, my_id)
                 entry = self._card_summary(
                     card,
@@ -801,15 +800,15 @@ class BoardOfBoardsLogic:
         active_cards.sort(key=lambda entry: relevance_order[entry["relevance"]])
         next_cards.sort(key=lambda entry: relevance_order[entry["relevance"]])
         return {
-            "uuid": board.uuid,
+            "uuid": initiative.uuid,
             "application_id": INITIATIVE_APPLICATION_ID,
-            "name": board.data.get("name", ""),
-            "objective": board.data.get("objective", ""),
+            "name": initiative.data.get("name", ""),
+            "objective": initiative.data.get("objective", ""),
             "expanded": bool(settings.get("expanded", False)),
             "order": int(settings.get("order", 0) or 0),
             "card_count": card_count,
             "discussion_count": len(discussion_nodes),
-            "agenda_count": len(self._agenda_items(board.uuid)),
+            "agenda_count": len(self._agenda_items(initiative.uuid)),
             "column_count": len(columns),
             "columns": [
                 {"uuid": column.uuid, "name": column.data.get("name", "")}
@@ -834,15 +833,15 @@ class BoardOfBoardsLogic:
         return "other"
 
     def _discussion_card_count(
-        self, board: ProtocolNode, network: dict | None = None,
+        self, initiative: ProtocolNode, network: dict | None = None,
     ) -> int:
-        return len(self._discussion_card_uuids(board, network))
+        return len(self._discussion_card_uuids(initiative, network))
 
     def _discussion_card_uuids(
-        self, board: ProtocolNode, network: dict | None = None,
+        self, initiative: ProtocolNode, network: dict | None = None,
     ) -> set[str]:
         card_uuids = set()
-        for event in self.kanban.transition_events(board.uuid, network):
+        for event in self.initiative.transition_events(initiative.uuid, network):
             if event.get("stage") in ("settled", "in_flight"):
                 continue
             node_uuid = event.get("node_uuid")
@@ -859,13 +858,13 @@ class BoardOfBoardsLogic:
 
     def _people_by_uuid(self) -> dict[str, dict]:
         people = {}
-        for user in self.kanban.users():
+        for user in self.initiative.users():
             user_id = user.get("profile_uuid") or user.get("id")
             if not user_id:
                 continue
             name = user.get("name") or ""
             if name == "?":
-                name = "Me" if user_id == self.kanban.user_profile().uuid else ""
+                name = "Me" if user_id == self.initiative.user_profile().uuid else ""
             people[user_id] = {
                 "id": user_id,
                 "name": name or self._short_id(user_id),
@@ -957,20 +956,20 @@ class BoardOfBoardsLogic:
         return perspectives
 
     @_session_transaction
-    def update_board_settings(self, board_uuid: str,
+    def update_initiative_settings(self, initiative_uuid: str,
                               expanded: bool | None = None,
                               active_column_uuid: str | None = None,
                               next_column_uuid: str | None = None) -> SessionResult:
-        kanban = self._kanban()
-        if kanban is None:
-            return SessionResult("error", reason=self._kanban_facade_error)
-        board = self.session.protocol.index.get(board_uuid)
-        if not board or board.data.get("type") != "kanban_board":
-            return SessionResult("error", reason="board not found")
-        valid_column_uuids = {column.uuid for column in kanban.columns(board)}
+        facade = self._initiative()
+        if facade is None:
+            return SessionResult("error", reason=self._initiative_facade_error)
+        initiative = self.session.protocol.index.get(initiative_uuid)
+        if not initiative or initiative.data.get("type") != "initiative":
+            return SessionResult("error", reason="initiative not found")
+        valid_column_uuids = {column.uuid for column in facade.columns(initiative)}
         metadata = self._metadata()
-        settings = metadata.setdefault("board_settings", {})
-        current = dict(settings.get(board_uuid, {}))
+        settings = metadata.setdefault("initiative_settings", {})
+        current = dict(settings.get(initiative_uuid, {}))
         if "order" not in current:
             current["order"] = self._next_order()
         if expanded is not None:
@@ -983,51 +982,51 @@ class BoardOfBoardsLogic:
             current["next_column_uuid"] = next_uuid if next_uuid in valid_column_uuids else ""
         if current.get("next_column_uuid") == current.get("active_column_uuid"):
             current["next_column_uuid"] = ""
-        settings[board_uuid] = current
-        return SessionResult("ok", value=board_uuid)
+        settings[initiative_uuid] = current
+        return SessionResult("ok", value=initiative_uuid)
 
     @_session_transaction
-    def reorder_boards(self, board_uuids: list[str]) -> SessionResult:
-        # Expanded and collapsed boards each have their own left/right
+    def reorder_initiatives(self, initiative_uuids: list[str]) -> SessionResult:
+        # Expanded and collapsed initiatives each have their own left/right
         # ordering in the UI, so reordering only ever touches the group
-        # the moved board already belongs to - the caller always passes
+        # the moved initiative already belongs to - the caller always passes
         # the full uuid list for that one group, never a mix of both.
-        kanban = self._kanban()
-        if kanban is None:
-            return SessionResult("error", reason=self._kanban_facade_error)
+        facade = self._initiative()
+        if facade is None:
+            return SessionResult("error", reason=self._initiative_facade_error)
         metadata = self._metadata()
-        settings = metadata.setdefault("board_settings", {})
-        valid_uuids = {board.uuid for board in kanban.boards()}
-        mentioned = [uuid for uuid in board_uuids if uuid in valid_uuids]
+        settings = metadata.setdefault("initiative_settings", {})
+        valid_uuids = {initiative.uuid for initiative in facade.initiatives()}
+        mentioned = [uuid for uuid in initiative_uuids if uuid in valid_uuids]
         if not mentioned:
             return SessionResult("ok", value=[])
         expanded_flag = bool(settings.get(mentioned[0], {}).get("expanded", False))
         same_group = {
-            board.uuid for board in kanban.boards()
-            if bool(settings.get(board.uuid, {}).get("expanded", False)) == expanded_flag
+            initiative.uuid for initiative in facade.initiatives()
+            if bool(settings.get(initiative.uuid, {}).get("expanded", False)) == expanded_flag
         }
         ordered = [uuid for uuid in mentioned if uuid in same_group]
         ordered.extend(uuid for uuid in sorted(same_group) if uuid not in ordered)
-        for order, board_uuid in enumerate(ordered):
-            item = dict(settings.get(board_uuid, {}))
+        for order, initiative_uuid in enumerate(ordered):
+            item = dict(settings.get(initiative_uuid, {}))
             item["order"] = order
-            settings[board_uuid] = item
+            settings[initiative_uuid] = item
         return SessionResult("ok", value=ordered)
 
     @_session_transaction
-    def pick_board(self, board_uuid: str,
+    def pick_initiative(self, initiative_uuid: str,
                    active_column_uuids: list[str] | None = None,
                    next_column_uuids: list[str] | None = None) -> SessionResult:
-        return self.update_board_settings(
-            board_uuid,
+        return self.update_initiative_settings(
+            initiative_uuid,
             expanded=True,
             active_column_uuid=(active_column_uuids or [""])[0],
             next_column_uuid=(next_column_uuids or [""])[0],
         )
 
     @_session_transaction
-    def unpick_board(self, board_uuid: str) -> SessionResult:
-        return self.update_board_settings(board_uuid, expanded=False)
+    def unpick_initiative(self, initiative_uuid: str) -> SessionResult:
+        return self.update_initiative_settings(initiative_uuid, expanded=False)
 
     @_session_transaction
     def toggle_selected(self, card_uuid: str) -> SessionResult:
@@ -1045,36 +1044,36 @@ class BoardOfBoardsLogic:
         metadata["selected_card_uuids"] = sorted(selected)
         return SessionResult("ok", value=is_selected)
 
-    def set_board_objective(
-        self, board_uuid: str, objective: str,
+    def set_initiative_objective(
+        self, initiative_uuid: str, objective: str,
     ) -> SessionResult:
-        kanban = self._kanban()
+        facade = self._initiative()
         return (
-            kanban.set_board_objective(board_uuid, objective)
-            if kanban else SessionResult("error", reason=self._kanban_facade_error)
+            facade.set_initiative_objective(initiative_uuid, objective)
+            if facade else SessionResult("error", reason=self._initiative_facade_error)
         )
 
     def move_card(
         self, card_uuid: str, column_uuid: str, index: int,
     ) -> SessionResult:
-        kanban = self._kanban()
+        facade = self._initiative()
         return (
-            kanban.move_card(card_uuid, column_uuid, index)
-            if kanban else SessionResult("error", reason=self._kanban_facade_error)
+            facade.move_card(card_uuid, column_uuid, index)
+            if facade else SessionResult("error", reason=self._initiative_facade_error)
         )
 
-    def react_to_kanban_node(
+    def react_to_initiative_node(
         self, source_addr: str, node_uuid: str, reaction: str,
         absent: bool = False,
     ) -> SessionResult:
-        kanban = self._kanban()
-        if not kanban:
-            return SessionResult("error", reason=self._kanban_facade_error)
+        facade = self._initiative()
+        if not facade:
+            return SessionResult("error", reason=self._initiative_facade_error)
         if reaction == "rollback":
-            return kanban.rollback_peer_node(
+            return facade.rollback_peer_node(
                 source_addr, node_uuid, absent,
             )
-        return kanban.accept_peer_node(source_addr, node_uuid, absent)
+        return facade.accept_peer_node(source_addr, node_uuid, absent)
 
     def drop_topic(self, topic_uuid: str) -> SessionResult:
         """Stop holding a topic without destroying it.
@@ -1091,18 +1090,18 @@ class BoardOfBoardsLogic:
         """
         return self.session.drop_topic(topic_uuid)
 
-    def delete_board(self, board_uuid: str) -> SessionResult:
-        kanban = self._kanban()
+    def delete_initiative(self, initiative_uuid: str) -> SessionResult:
+        facade = self._initiative()
         return (
-            kanban.delete_board(board_uuid)
-            if kanban else SessionResult("error", reason=self._kanban_facade_error)
+            facade.delete_initiative(initiative_uuid)
+            if facade else SessionResult("error", reason=self._initiative_facade_error)
         )
 
     def delete_card(self, card_uuid: str) -> SessionResult:
-        kanban = self._kanban()
+        facade = self._initiative()
         return (
-            kanban.delete_card(card_uuid)
-            if kanban else SessionResult("error", reason=self._kanban_facade_error)
+            facade.delete_card(card_uuid)
+            if facade else SessionResult("error", reason=self._initiative_facade_error)
         )
 
     def update_card(
@@ -1110,64 +1109,64 @@ class BoardOfBoardsLogic:
         participants: list[str] | None = None, owner: str | None = None,
         expected_content_hash: str | None = None,
     ) -> SessionResult:
-        kanban = self._kanban()
-        if not kanban:
-            return SessionResult("error", reason=self._kanban_facade_error)
-        return kanban.update_card(
+        facade = self._initiative()
+        if not facade:
+            return SessionResult("error", reason=self._initiative_facade_error)
+        return facade.update_card(
             card_uuid, name, description, list(participants or []), owner,
             expected_content_hash,
         )
 
-    def create_kanban_agenda_item(
-        self, board_uuid: str, text: str, priority: str | None = None,
+    def create_initiative_agenda_item(
+        self, initiative_uuid: str, text: str, priority: str | None = None,
     ) -> SessionResult:
-        kanban = self._kanban()
+        facade = self._initiative()
         return (
-            kanban.create_agenda_item(text, priority, board_uuid)
-            if kanban else SessionResult("error", reason=self._kanban_facade_error)
+            facade.create_agenda_item(text, priority, initiative_uuid)
+            if facade else SessionResult("error", reason=self._initiative_facade_error)
         )
 
-    def delete_kanban_agenda_item(self, item_uuid: str) -> SessionResult:
-        kanban = self._kanban()
+    def delete_initiative_agenda_item(self, item_uuid: str) -> SessionResult:
+        facade = self._initiative()
         return (
-            kanban.delete_agenda_item(item_uuid)
-            if kanban else SessionResult("error", reason=self._kanban_facade_error)
+            facade.delete_agenda_item(item_uuid)
+            if facade else SessionResult("error", reason=self._initiative_facade_error)
         )
 
-    def update_kanban_agenda_item(
+    def update_initiative_agenda_item(
         self, item_uuid: str, text: str,
     ) -> SessionResult:
-        kanban = self._kanban()
+        facade = self._initiative()
         return (
-            kanban.update_agenda_item(item_uuid, text)
-            if kanban else SessionResult("error", reason=self._kanban_facade_error)
+            facade.update_agenda_item(item_uuid, text)
+            if facade else SessionResult("error", reason=self._initiative_facade_error)
         )
 
-    def prioritize_kanban_agenda_item(
+    def prioritize_initiative_agenda_item(
         self, item_uuid: str, priority: str | None,
     ) -> SessionResult:
-        kanban = self._kanban()
+        facade = self._initiative()
         return (
-            kanban.set_agenda_item_priority(item_uuid, priority)
-            if kanban else SessionResult("error", reason=self._kanban_facade_error)
+            facade.set_agenda_item_priority(item_uuid, priority)
+            if facade else SessionResult("error", reason=self._initiative_facade_error)
         )
 
-    def move_kanban_agenda_item(
+    def move_initiative_agenda_item(
         self, item_uuid: str, index: int,
     ) -> SessionResult:
-        kanban = self._kanban()
+        facade = self._initiative()
         return (
-            kanban.move_agenda_item(item_uuid, index)
-            if kanban else SessionResult("error", reason=self._kanban_facade_error)
+            facade.move_agenda_item(item_uuid, index)
+            if facade else SessionResult("error", reason=self._initiative_facade_error)
         )
 
-    def set_kanban_auto_adopt(
-        self, board_uuid: str, mode: str,
+    def set_initiative_auto_adopt(
+        self, initiative_uuid: str, mode: str,
     ) -> SessionResult:
-        kanban = self._kanban()
+        facade = self._initiative()
         return (
-            kanban.set_auto_adopt_mode(mode, board_uuid)
-            if kanban else SessionResult("error", reason=self._kanban_facade_error)
+            facade.set_auto_adopt_mode(mode, initiative_uuid)
+            if facade else SessionResult("error", reason=self._initiative_facade_error)
         )
 
     def create_topic(
@@ -1186,21 +1185,21 @@ class BoardOfBoardsLogic:
             application_id, title, template, snapshot,
         )
 
-    def export_board_snapshot(
-        self, board_uuid: str, name: str = "", description: str = "",
+    def export_initiative_snapshot(
+        self, initiative_uuid: str, name: str = "", description: str = "",
     ) -> SessionResult:
-        kanban = self._kanban()
-        export = getattr(kanban, "export_snapshot", None) if kanban else None
+        facade = self._initiative()
+        export = getattr(facade, "export_snapshot", None) if facade else None
         return (
-            export(board_uuid, name, description)
+            export(initiative_uuid, name, description)
             if callable(export) else SessionResult("error", reason="Snapshots are not supported")
         )
 
-    def rename_board(self, board_uuid: str, name: str) -> SessionResult:
-        kanban = self._kanban()
+    def rename_initiative(self, initiative_uuid: str, name: str) -> SessionResult:
+        facade = self._initiative()
         return (
-            kanban.rename_board(board_uuid, name)
-            if kanban else SessionResult("error", reason=self._kanban_facade_error)
+            facade.rename_initiative(initiative_uuid, name)
+            if facade else SessionResult("error", reason=self._initiative_facade_error)
         )
 
     def export_team_snapshot(
@@ -1360,9 +1359,9 @@ class BoardOfBoardsLogic:
     def _metadata(self) -> dict:
         return self.session.application_metadata(APP_METADATA_KEY)
 
-    def _normalized_settings(self, boards: list[ProtocolNode]) -> dict[str, dict]:
+    def _normalized_settings(self, initiatives: list[ProtocolNode]) -> dict[str, dict]:
         metadata = self._metadata()
-        stored = metadata.get("board_settings", {})
+        stored = metadata.get("initiative_settings", {})
         settings = (
             {
                 uuid: dict(item)
@@ -1371,7 +1370,7 @@ class BoardOfBoardsLogic:
             }
             if isinstance(stored, dict) else {}
         )
-        valid_uuids = {board.uuid for board in boards}
+        valid_uuids = {initiative.uuid for initiative in initiatives}
         for stale_uuid in list(settings):
             if stale_uuid not in valid_uuids:
                 settings.pop(stale_uuid, None)
@@ -1382,49 +1381,17 @@ class BoardOfBoardsLogic:
             ),
             default=-1,
         ) + 1
-        for board in boards:
-            item = dict(settings.get(board.uuid, {}))
+        for initiative in initiatives:
+            item = dict(settings.get(initiative.uuid, {}))
             item.setdefault("expanded", False)
             if "order" not in item:
                 item["order"] = next_order
                 next_order += 1
-            settings[board.uuid] = item
+            settings[initiative.uuid] = item
         return settings
 
-    def _migrate_old_metadata(
-        self, settings: dict, metadata: dict | None = None,
-    ) -> None:
-        metadata = metadata if metadata is not None else self._metadata()
-        picked = metadata.pop("picked_boards", [])
-        bindings = metadata.pop("board_bindings", {})
-        picked = picked if isinstance(picked, list) else []
-        bindings = bindings if isinstance(bindings, dict) else {}
-        for order, board_uuid in enumerate(picked):
-            binding = (
-                bindings.get(board_uuid, {})
-                if isinstance(bindings.get(board_uuid, {}), dict) else {}
-            )
-            existing = settings.get(board_uuid, {})
-            item = dict(existing) if isinstance(existing, dict) else {}
-            active = binding.get("active_column_uuids")
-            following = binding.get("next_column_uuids")
-            item.setdefault("expanded", True)
-            item.setdefault("order", order)
-            item.setdefault(
-                "active_column_uuid",
-                active[0] if isinstance(active, list) and active else "",
-            )
-            item.setdefault(
-                "next_column_uuid",
-                (
-                    following[0]
-                    if isinstance(following, list) and following else ""
-                ),
-            )
-            settings[board_uuid] = item
-
     def _next_order(self) -> int:
-        settings = self._metadata().setdefault("board_settings", {})
+        settings = self._metadata().setdefault("initiative_settings", {})
         orders = [
             int(item.get("order", -1) or 0)
             for item in settings.values()

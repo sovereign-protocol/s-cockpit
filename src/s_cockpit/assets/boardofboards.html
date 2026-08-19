@@ -38,16 +38,16 @@
       </form>
     </dialog>
 
-    <dialog id="boardSettingsModal">
+    <dialog id="initiativeSettingsModal">
       <div class="bob-manage">
-        <h2 id="boardSettingsTitle">Initiative settings</h2>
-        <div id="boardSettingsFields"></div>
+        <h2 id="initiativeSettingsTitle">Initiative settings</h2>
+        <div id="initiativeSettingsFields"></div>
         <menu>
-          <button type="button" id="saveBoardSnapshotBtn">Save snapshot...</button>
-          <button type="button" id="dropBoardBtn">Stop holding it</button>
-          <button type="button" id="deleteBoardSettingsBtn" class="danger">Delete initiative</button>
-          <button type="button" id="cancelBoardSettingsBtn">Cancel</button>
-          <button type="button" id="saveBoardSettingsBtn" class="primary">Save</button>
+          <button type="button" id="saveInitiativeSnapshotBtn">Save snapshot...</button>
+          <button type="button" id="dropInitiativeBtn">Stop holding it</button>
+          <button type="button" id="deleteInitiativeSettingsBtn" class="danger">Delete initiative</button>
+          <button type="button" id="cancelInitiativeSettingsBtn">Cancel</button>
+          <button type="button" id="saveInitiativeSettingsBtn" class="primary">Save</button>
         </menu>
       </div>
     </dialog>
@@ -105,7 +105,7 @@
       let modalPerspectiveOptions = [];
       let modalLocalDraft = null;
       let modalReadOnlyPerspective = false;
-      let settingsBoard = null;
+      let settingsInitiative = null;
       let settingsTeam = null;
       let settingsFlow = null;
       // Only the two modes Core does not know about; "always" and "never"
@@ -124,7 +124,7 @@
       // tile that shows a different mark from the header it opens is the
       // same divergence U1 predicts, arriving in pictures.
       const APP_ICONS = {
-        kanban:
+        initiative:
           '<rect x="4" y="4" width="6" height="14" rx="2"></rect>' +
           '<rect x="14" y="4" width="6" height="8" rx="2"></rect>' +
           '<path d="M5.5 7.5h3"></path><path d="M15.5 7.5h3"></path>',
@@ -152,7 +152,7 @@
         });
       sessionView.subscribe((nextState, _pending, event) => {
         state = nextState;
-        if (!Array.isArray(state.boards)) return;
+        if (!Array.isArray(state.initiatives)) return;
         if (event.change === "state" || event.change === "tiles") {
           render();
         }
@@ -212,7 +212,7 @@
         container.replaceChildren();
         const teams = state.teams || [];
         const processes = state.processes || [];
-        if (!state.boards.length && !teams.length && !processes.length) {
+        if (!state.initiatives.length && !teams.length && !processes.length) {
           const empty = document.createElement("p");
           empty.className = "bob-empty";
           empty.textContent = "Nothing yet - use “+ Add new”.";
@@ -230,7 +230,7 @@
               ? renderExpandedTeam(tile, index, expanded.length)
               : tile.application_id === "flow"
                 ? renderFlowTile(tile, index, expanded.length)
-                : renderExpandedBoard(tile, index, expanded.length),
+                : renderExpandedInitiative(tile, index, expanded.length),
           );
         });
         chunk(collapsed, 5).forEach((group, chunkIndex) => {
@@ -242,7 +242,7 @@
                 ? renderTeamTile(tile, chunkIndex * 5 + i, collapsed.length)
                 : tile.application_id === "flow"
                   ? renderFlowTile(tile, chunkIndex * 5 + i, collapsed.length)
-                  : renderCollapsedBoard(tile, chunkIndex * 5 + i, collapsed.length),
+                  : renderCollapsedInitiative(tile, chunkIndex * 5 + i, collapsed.length),
             ),
           );
           container.append(lane);
@@ -283,7 +283,7 @@
           project: (draft, nextTopic) => {
             draft.selected_topic = nextTopic;
             for (const entry of [
-              ...(draft.boards || []),
+              ...(draft.initiatives || []),
               ...(draft.teams || []),
               ...(draft.processes || []),
             ]) {
@@ -308,7 +308,7 @@
       function tilesInDisplayOrder() {
         const order = new Map((state.tile_order || []).map((uuid, index) => [uuid, index]));
         return [
-          ...(state.boards || []),
+          ...(state.initiatives || []),
           ...(state.teams || []),
           ...(state.processes || []),
         ].sort(
@@ -413,7 +413,7 @@
         return panel;
       }
 
-      // The same header a board gets: move, enlarge/collapse, share,
+      // The same header an initiative gets: move, enlarge/collapse, share,
       // settings, and the counts underneath. The two topic kinds differ in
       // what enlarging shows, not in what a tile offers.
       function agreementHeader(team, index, total) {
@@ -621,50 +621,50 @@
         });
       }
 
-      function renderExpandedBoard(board, index, total) {
+      function renderExpandedInitiative(initiative, index, total) {
         const panel = document.createElement("section");
         panel.className = "bob-board expanded";
-        makeTopicSelectable(panel, board);
-        panel.append(boardHeader(board, true, index, total));
-        panel.append(renderBand("Active", board, board.active_cards));
-        panel.append(renderBand("Next", board, board.next_cards));
+        makeTopicSelectable(panel, initiative);
+        panel.append(initiativeHeader(initiative, true, index, total));
+        panel.append(renderBand("Active", initiative, initiative.active_cards));
+        panel.append(renderBand("Next", initiative, initiative.next_cards));
         return panel;
       }
 
-      function renderCollapsedBoard(board, index, total) {
+      function renderCollapsedInitiative(initiative, index, total) {
         const tile = document.createElement("section");
         tile.className = "bob-board collapsed";
-        makeTopicSelectable(tile, board);
-        tile.append(boardHeader(board, false, index, total));
+        makeTopicSelectable(tile, initiative);
+        tile.append(initiativeHeader(initiative, false, index, total));
         return tile;
       }
 
-      function boardHeader(board, expanded, index = 0, total = 1) {
+      function initiativeHeader(initiative, expanded, index = 0, total = 1) {
         const header = document.createElement("div");
         header.className = "bob-board-header";
         const main = document.createElement("div");
         main.className = "bob-board-main";
         const title = topicTitle(
-          "kanban",
-          board.name,
-          SovereignShell.topicHref("initiative", board.uuid),
+          "initiative",
+          initiative.name,
+          SovereignShell.topicHref("initiative", initiative.uuid),
         );
-        main.append(title, objectiveElement(board));
+        main.append(title, objectiveElement(initiative));
         header.append(main);
         const tools = document.createElement("div");
         tools.className = "bob-board-tools";
         const controls = document.createElement("div");
         controls.className = "bob-board-controls";
-        controls.append(moveButton("<", index === 0, () => moveTile(board, -1)));
-        controls.append(moveButton(">", index >= total - 1, () => moveTile(board, 1)));
+        controls.append(moveButton("<", index === 0, () => moveTile(initiative, -1)));
+        controls.append(moveButton(">", index >= total - 1, () => moveTile(initiative, 1)));
         if (expanded) {
-          controls.append(iconButton(ICON_COLLAPSE, "Collapse", () => setExpanded(board, false)));
+          controls.append(iconButton(ICON_COLLAPSE, "Collapse", () => setExpanded(initiative, false)));
         } else {
-          controls.append(iconButton(ICON_EXPAND, "Expand", () => setExpanded(board, true)));
+          controls.append(iconButton(ICON_EXPAND, "Expand", () => setExpanded(initiative, true)));
         }
-        controls.append(iconButton(ICON_SHARE, "Share", () => openShareModal(board)));
-        controls.append(iconButton(ICON_SETTINGS, "Settings", () => openBoardSettings(board)));
-        tools.append(controls, boardStatus(board));
+        controls.append(iconButton(ICON_SHARE, "Share", () => openShareModal(initiative)));
+        controls.append(iconButton(ICON_SETTINGS, "Settings", () => openInitiativeSettings(initiative)));
+        tools.append(controls, initiativeStatus(initiative));
         header.append(tools);
         return header;
       }
@@ -693,7 +693,7 @@
         return button;
       }
 
-      function objectiveElement(board) {
+      function objectiveElement(initiative) {
         // A fixed-height 2-line box, bottom-aligned: short objectives sit
         // low (away from the title above), longer ones fill both lines and
         // reach up near the title. Line-clamp+ellipsis only applies while
@@ -704,15 +704,15 @@
         div.className = "bob-objective";
         SovereignUI.editableText({
           element: div,
-          value: board.objective || "",
+          value: initiative.objective || "",
           placeholder: "Set an objective...",
           ariaLabel: "Initiative objective",
           allowEmpty: true,
           titleFromValue: true,
           onCommit: (value) => run(
             (request) =>
-              request("/api/cockpit/kanban/boards/set_objective", {
-                board_uuid: board.uuid,
+              request("/api/cockpit/initiative/initiatives/set_objective", {
+                initiative_uuid: initiative.uuid,
                 objective: value,
               }),
             "Objective updated",
@@ -723,12 +723,12 @@
         return wrap;
       }
 
-      function boardStatus(board) {
+      function initiativeStatus(initiative) {
         const status = document.createElement("div");
         status.className = "bob-board-status";
         status.append(
-          transitionItem(board.discussion_count),
-          statItem(board.agenda_count, "agenda"),
+          transitionItem(initiative.discussion_count),
+          statItem(initiative.agenda_count, "agenda"),
         );
         return status;
       }
@@ -748,7 +748,7 @@
         return item;
       }
 
-      function renderBand(label, board, cards) {
+      function renderBand(label, initiative, cards) {
         const wrap = document.createElement("div");
         wrap.className = "bob-band";
         const heading = document.createElement("h3");
@@ -759,7 +759,7 @@
         count.textContent = cards.length;
         const sources = document.createElement("span");
         sources.className = "bob-band-sources";
-        sources.textContent = `(${bandColumnNames(board, label).join(", ") || "not set"})`;
+        sources.textContent = `(${bandColumnNames(initiative, label).join(", ") || "not set"})`;
         heading.append(title, count, sources);
         wrap.append(heading);
         const list = document.createElement("div");
@@ -771,21 +771,21 @@
             divider.className = "bob-relevance-divider";
             list.append(divider);
           }
-          list.append(renderCard(board, card, label));
+          list.append(renderCard(initiative, card, label));
           lastRelevance = card.relevance;
         }
         wrap.append(list);
         return wrap;
       }
 
-      function bandColumnNames(board, label) {
+      function bandColumnNames(initiative, label) {
         const sourceUuids =
-          label === "Active" ? board.active_column_uuids : board.next_column_uuids;
-        const columnsByUuid = new Map(board.columns.map((column) => [column.uuid, column.name]));
+          label === "Active" ? initiative.active_column_uuids : initiative.next_column_uuids;
+        const columnsByUuid = new Map(initiative.columns.map((column) => [column.uuid, column.name]));
         return sourceUuids.map((uuid) => columnsByUuid.get(uuid)).filter(Boolean);
       }
 
-      function renderCard(board, card, band) {
+      function renderCard(initiative, card, band) {
         const row = document.createElement("div");
         row.className = "bob-card" + (card.selected ? " selected" : "");
         applyCardTransition(row, card);
@@ -807,7 +807,7 @@
         row.append(cardDiscussionTools(card));
         row.append(cardPeople(card));
 
-        const statusOptions = board.columns.map((column) => [column.uuid, column.name]);
+        const statusOptions = initiative.columns.map((column) => [column.uuid, column.name]);
         if (band === "Active") {
           statusOptions.push(["__selected__", "Selected"]);
         }
@@ -828,7 +828,7 @@
             }
             run(
               (request) =>
-                request("/api/cockpit/kanban/cards/move", {
+                request("/api/cockpit/initiative/cards/move", {
                   card_uuid: card.uuid,
                   column_uuid: value,
                   index: 0,
@@ -867,8 +867,8 @@
       async function applyReaction(uuid, choice) {
         const endpoint =
           choice.action === "rollback"
-            ? "/api/cockpit/kanban/rollback"
-            : "/api/cockpit/kanban/adopt";
+            ? "/api/cockpit/initiative/rollback"
+            : "/api/cockpit/initiative/adopt";
         await run(
           (request) =>
             request(endpoint, {
@@ -952,8 +952,8 @@
       }
 
       function pickerCandidates() {
-        // Not board-scoped (unlike initiative.html's picker) - Overview spans
-        // every board and has no per-board peer topic here, so this offers
+        // Not topic-scoped (unlike initiative.html's picker) - Overview spans
+        // every initiative and has no per-initiative peer topic here, so this offers
         // every peer the session knows about instead.
         const known = state.people || [];
         const already = modalParticipants
@@ -1006,39 +1006,39 @@
         modalOwner = select.value || null;
       }
 
-      function setExpanded(board, expanded) {
+      function setExpanded(initiative, expanded) {
         return submitMutation({
-          key: `expanded:${board.uuid}`,
-          command: "set-board-expanded",
-          arguments: { uuid: board.uuid, expanded },
+          key: `expanded:${initiative.uuid}`,
+          command: "set-initiative-expanded",
+          arguments: { uuid: initiative.uuid, expanded },
           action: (request) =>
-            request("/api/cockpit/boards/settings", { board_uuid: board.uuid, expanded }),
+            request("/api/cockpit/initiatives/settings", { initiative_uuid: initiative.uuid, expanded }),
           successMessage: expanded ? "Expanded" : "Collapsed",
           project: (draft, change) => {
-            const target = (draft.boards || []).find((entry) => entry.uuid === change.uuid);
+            const target = (draft.initiatives || []).find((entry) => entry.uuid === change.uuid);
             if (target) target.expanded = change.expanded;
             return draft;
           },
         });
       }
 
-      function openBoardSettings(board) {
-        settingsBoard = board;
-        el("boardSettingsTitle").textContent = board.name;
-        const fields = el("boardSettingsFields");
+      function openInitiativeSettings(initiative) {
+        settingsInitiative = initiative;
+        el("initiativeSettingsTitle").textContent = initiative.name;
+        const fields = el("initiativeSettingsFields");
         fields.replaceChildren();
         fields.append(
           selectField(
             "settingsActiveColumn",
             "Active column",
-            board.columns,
-            board.active_column_uuid || "",
+            initiative.columns,
+            initiative.active_column_uuid || "",
           ),
           selectField(
             "settingsNextColumn",
             "Next column",
-            board.columns,
-            board.next_column_uuid || "",
+            initiative.columns,
+            initiative.next_column_uuid || "",
           ),
         );
         const active = el("settingsActiveColumn");
@@ -1055,7 +1055,7 @@
             SovereignUI.refreshSelect(active);
           }
         };
-        el("boardSettingsModal").showModal();
+        el("initiativeSettingsModal").showModal();
       }
 
       function openTeamSettings(team) {
@@ -1092,8 +1092,8 @@
       function snapshotExportConfig(applicationId) {
         const config = {
           initiative: {
-            path: "/api/cockpit/kanban/snapshots/export",
-            key: "board_uuid",
+            path: "/api/cockpit/initiative/snapshots/export",
+            key: "initiative_uuid",
           },
           team: {
             path: "/api/cockpit/team/snapshots/export",
@@ -1163,46 +1163,46 @@
         }
       }
 
-      el("cancelBoardSettingsBtn").onclick = () => el("boardSettingsModal").close();
-      el("saveBoardSnapshotBtn").onclick = () => {
-        const board = settingsBoard;
-        if (!board) return;
-        el("boardSettingsModal").close();
-        saveSnapshotFile("initiative", board.uuid, board.name || "Untitled initiative");
+      el("cancelInitiativeSettingsBtn").onclick = () => el("initiativeSettingsModal").close();
+      el("saveInitiativeSnapshotBtn").onclick = () => {
+        const initiative = settingsInitiative;
+        if (!initiative) return;
+        el("initiativeSettingsModal").close();
+        saveSnapshotFile("initiative", initiative.uuid, initiative.name || "Untitled initiative");
       };
       // Dropping is not deleting. Nothing is published and nobody else loses
       // anything - this client stops holding it, and a peer who still
       // publishes it will offer it back. Core refuses while something here
       // still references it, and says how many places do.
-      el("dropBoardBtn").onclick = () => {
-        const board = settingsBoard;
-        if (!board) return;
+      el("dropInitiativeBtn").onclick = () => {
+        const initiative = settingsInitiative;
+        if (!initiative) return;
         confirmAction(
           "Stop holding this initiative?",
           "It leaves this client only. Everybody else keeps theirs, and it "
           + "comes back if somebody still sharing it offers it again.",
           () => {
-            el("boardSettingsModal").close();
+            el("initiativeSettingsModal").close();
             return run(
               (request) =>
-                request("/api/cockpit/topics/drop", {topic_uuid: board.uuid}),
+                request("/api/cockpit/topics/drop", {topic_uuid: initiative.uuid}),
               "Initiative dropped",
             );
           },
         );
       };
-      el("deleteBoardSettingsBtn").onclick = () => {
-        const board = settingsBoard;
-        if (!board) return;
+      el("deleteInitiativeSettingsBtn").onclick = () => {
+        const initiative = settingsInitiative;
+        if (!initiative) return;
         confirmAction(
           "Delete this initiative?",
           "This removes the initiative and all of its cards. This cannot be undone.",
           () => {
-            el("boardSettingsModal").close();
+            el("initiativeSettingsModal").close();
             return run(
               (request) =>
-                request("/api/cockpit/kanban/boards/delete", {
-                  board_uuid: board.uuid,
+                request("/api/cockpit/initiative/initiatives/delete", {
+                  initiative_uuid: initiative.uuid,
                 }),
               "Initiative deleted",
             );
@@ -1284,13 +1284,13 @@
           },
         );
       };
-      el("saveBoardSettingsBtn").onclick = () => {
-        const board = settingsBoard;
-        el("boardSettingsModal").close();
+      el("saveInitiativeSettingsBtn").onclick = () => {
+        const initiative = settingsInitiative;
+        el("initiativeSettingsModal").close();
         run(
           (request) =>
-            request("/api/cockpit/boards/settings", {
-              board_uuid: board.uuid,
+            request("/api/cockpit/initiatives/settings", {
+              initiative_uuid: initiative.uuid,
               active_column_uuid: el("settingsActiveColumn").value,
               next_column_uuid: el("settingsNextColumn").value,
             }),
@@ -1405,7 +1405,7 @@
           el("cardModal").close();
           return run(
             (request) =>
-              request("/api/cockpit/kanban/cards/delete", { card_uuid: card.uuid }),
+              request("/api/cockpit/initiative/cards/delete", { card_uuid: card.uuid }),
             "Card deleted",
           );
         });
@@ -1417,7 +1417,7 @@
         el("cardModal").close();
         run(
           (request) =>
-            request("/api/cockpit/kanban/cards/update", {
+            request("/api/cockpit/initiative/cards/update", {
               card_uuid: card.uuid,
               name: el("cardName").value,
               description: el("cardDescription").value,
@@ -1447,12 +1447,12 @@
           }
           if (app === "initiative") {
             return {
-              topicKey: "board_uuid",
-              create: "/api/cockpit/kanban/agenda/create",
-              delete: "/api/cockpit/kanban/agenda/delete",
-              update: "/api/cockpit/kanban/agenda/update",
-              setPriority: "/api/cockpit/kanban/agenda/set_priority",
-              move: "/api/cockpit/kanban/agenda/move",
+              topicKey: "initiative_uuid",
+              create: "/api/cockpit/initiative/agenda/create",
+              delete: "/api/cockpit/initiative/agenda/delete",
+              update: "/api/cockpit/initiative/agenda/update",
+              setPriority: "/api/cockpit/initiative/agenda/set_priority",
+              move: "/api/cockpit/initiative/agenda/move",
             };
           }
           if (app === "flow") {
@@ -1469,12 +1469,12 @@
         },
         autoAdoptRoute: () =>
           state?.selected_topic?.application_id === "initiative"
-            ? { path: "/api/cockpit/kanban/auto_adopt", topicKey: "board_uuid" }
+            ? { path: "/api/cockpit/initiative/auto_adopt", topicKey: "initiative_uuid" }
             : null,
         autoAdoptLabels: AUTO_ADOPT_LABELS,
         autoAdoptDescriptions: AUTO_ADOPT_DESCRIPTIONS,
         // Reacting from the pane is offered only where the Cockpit has routes
-        // to honour it. It carries a board's decisions; a team's or a
+        // to honour it. It carries an initiative's decisions; a team's or a
         // process's are settled in that application, so their divergences stay
         // shown here and answered there.
         canReact: () => state?.selected_topic?.application_id === "initiative",
@@ -1538,7 +1538,7 @@
         const topicUuid = params.get("share");
         if (!topicUuid) return;
         const topic = [
-          ...(state.boards || []),
+          ...(state.initiatives || []),
           ...(state.teams || []),
           ...(state.processes || []),
         ].find((entry) => entry.uuid === topicUuid);
@@ -1552,7 +1552,7 @@
         .then(openShareModalFromUrl)
         .catch((err) => showToast(err.message, true));
 
-      function isEditingBoards() {
+      function isEditingTiles() {
         // Refreshing rebuilds #boards from scratch, which would yank focus
         // out from under an in-progress edit (objective text, card fields,
         // the status dropdown) - skip the poll while one of those is
@@ -1564,12 +1564,12 @@
       sessionView.startPolling({
         views: ["tiles", "context"],
         intervalMs: 1500,
-        when: () => !isEditingBoards(),
+        when: () => !isEditingTiles(),
       });
       // Presence can age without changing application data. Refresh only the
       // selected topic's collaboration fragment, never every tile.
       setInterval(() => {
-        if (!isEditingBoards()) {
+        if (!isEditingTiles()) {
           sessionView.refresh("context").catch((error) => showToast(error.message, true));
         }
       }, 3000);
