@@ -23,9 +23,13 @@
   `kanban_column` and `kanban_card` are untouched: a Kanban board is still
   what organises an initiative.
 
-- **The initiative, team and flow facades are required at versions 3, 3 and 2**,
+- **The initiative, team and flow facades are required at versions 4, 4 and 2**,
   matching each application's bump for the shared `react_to_node` reaction
-  endpoint. All four must be released together.
+  endpoint and, for initiative and team, retiring their own connected-work
+  methods and payload keys for Core's shared `sovereign_relationship`
+  (s-core/DESIGN_NAVIGATION_LINKS.md) — nothing here read them directly, so
+  the bump is the whole of what changes on this side. All four must be
+  released together.
 
 - **Team and flow tiles carry a transition marker too.** Board of Boards
   already dotted an initiative tile with its highest-priority stage; team and

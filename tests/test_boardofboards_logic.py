@@ -28,9 +28,9 @@ class _FacadeLookup:
         self.flow = flow
 
     def find(self, application_id, facade_api_version):
-        if application_id == "initiative" and facade_api_version == 3:
+        if application_id == "initiative" and facade_api_version == 4:
             return self.initiative
-        if application_id == "team" and facade_api_version == 3:
+        if application_id == "team" and facade_api_version == 4:
             return self.team
         if application_id == "flow" and facade_api_version == 2:
             return self.flow
