@@ -327,11 +327,6 @@ dialog.relay-target-dialog {
   text-align: center;
 }
 
-.bob-stat.bob-stat-divergence {
-  color: #cf222e;
-  border-color: #cf222e;
-}
-
 .bob-band h3 {
   display: flex;
   gap: 0.3rem;
@@ -404,27 +399,7 @@ dialog.relay-target-dialog {
   position: relative;
 }
 
-.bob-card.diff {
-  border-left: 4px solid #d4a72c;
-}
-
-/* Colour by stage of the exchange, matching S-Initiative: grey still travelling,
-   purple mine and waiting on them, amber theirs and waiting on me, red a
-   real two-sided conflict. */
-.bob-card.stage-in_flight {
-  border-left-color: #8c9bab;
-}
-.bob-card.stage-awaiting_peer {
-  border-left-color: #6554c0;
-}
-.bob-card.stage-awaiting_me {
-  border-left-color: #f59e0b;
-}
-.bob-card.stage-conflict {
-  border-left-color: #de350b;
-}
-
-.bob-card.diff .bob-status-control {
+.bob-card.ui-transition-surface .bob-status-control {
   margin-right: 1.25rem;
 }
 
@@ -490,26 +465,6 @@ dialog.relay-target-dialog {
   line-height: 1.35;
   white-space: pre-wrap;
 }
-
-.bob-adopt,
-.bob-react,
-.bob-keep-mine-menu {
-  border: 1px solid #d0d7de;
-  border-radius: 6px;
-  background: #ffffff;
-  color: #24292f;
-  font-size: 0.72rem;
-  min-height: 1.45rem;
-  padding: 0.08rem 0.3rem;
-}
-
-.bob-adopt,
-.bob-react {
-  cursor: pointer;
-  font-weight: 800;
-  width: auto;
-}
-
 
 .bob-card-people {
   display: flex;
@@ -625,19 +580,9 @@ body {
   border-color: #21262d;
   color: #f0f6fc;
 }
-.bob-stat.bob-stat-divergence {
-  color: #f87171;
-  border-color: #f87171;
-}
 .bob-card {
   background: #161b22;
   border-color: #21262d;
-}
-.bob-adopt,
-.bob-react {
-  background: #0d1117;
-  border-color: #30363d;
-  color: #f0f6fc;
 }
 .bob-card.selected {
   background: #3a2f0b;
@@ -863,12 +808,6 @@ button,
   background: #ffffff;
   border-color: #e3e5e8;
 }
-:root[data-theme="light"] .bob-adopt,
-:root[data-theme="light"] .bob-react {
-  background: #ffffff;
-  border-color: #dfe1e6;
-  color: #1b1f23;
-}
 /* Selection stays amber in both themes - it is a status, and U2 keeps status
    colours meaning the same thing everywhere. Only the values are retuned for
    contrast against a light card. */
@@ -905,10 +844,6 @@ button,
 :root[data-theme="light"] .bob-board.selected-topic {
   border-color: #0969da;
   box-shadow: 0 0 0 2px rgba(9, 105, 218, 0.18);
-}
-:root[data-theme="light"] .bob-stat.bob-stat-divergence {
-  color: #cf222e;
-  border-color: #cf222e;
 }
 :root[data-theme="light"] .bob-team-document {
   background: #fafbfc;

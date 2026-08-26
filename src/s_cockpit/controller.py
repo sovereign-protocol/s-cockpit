@@ -90,18 +90,12 @@ def build_routes(logic, runtime) -> list[Route]:
             data["card_uuid"], data["column_uuid"], int(data.get("index", 0)),
         ))
 
-    async def api_adopt_initiative_node(request: Request):
+    async def api_react(request: Request):
         data = await request.json()
-        return await _mutation_result(runtime, data, lambda: logic.react_to_initiative_node(
-            data["source_addr"], data["node_uuid"], "adopt",
-            bool(data.get("adopt_absence")),
-        ))
-
-    async def api_rollback_initiative_node(request: Request):
-        data = await request.json()
-        return await _mutation_result(runtime, data, lambda: logic.react_to_initiative_node(
-            data["source_addr"], data["node_uuid"], "rollback",
-            bool(data.get("rollback_absence")),
+        return await _mutation_result(runtime, data, lambda: logic.react_to_node(
+            data.get("application_id", ""), data["source_addr"],
+            data["node_uuid"], data.get("reaction", ""),
+            bool(data.get("absent")),
         ))
 
     async def api_drop_topic(request: Request):
@@ -332,10 +326,7 @@ def build_routes(logic, runtime) -> list[Route]:
               api_set_initiative_objective, methods=["POST"]),
         Route("/api/cockpit/initiative/cards/move", api_move_card,
               methods=["POST"]),
-        Route("/api/cockpit/initiative/adopt", api_adopt_initiative_node,
-              methods=["POST"]),
-        Route("/api/cockpit/initiative/rollback", api_rollback_initiative_node,
-              methods=["POST"]),
+        Route("/api/cockpit/react", api_react, methods=["POST"]),
         Route("/api/cockpit/topics/drop", api_drop_topic, methods=["POST"]),
         Route("/api/cockpit/initiative/initiatives/delete", api_delete_initiative,
               methods=["POST"]),

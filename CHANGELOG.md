@@ -23,8 +23,17 @@
   `kanban_column` and `kanban_card` are untouched: a Kanban board is still
   what organises an initiative.
 
-- **The initiative facade is required at version 2**, matching S-Initiative's
-  bump. The two must be released together.
+- **The initiative, team and flow facades are required at versions 3, 3 and 2**,
+  matching each application's bump for the shared `react_to_node` reaction
+  endpoint. All four must be released together.
+
+- **Team and flow tiles carry a transition marker too.** Board of Boards
+  already dotted an initiative tile with its highest-priority stage; team and
+  flow tiles now read `transition_by_node` off the same `collaboration_context`
+  call and get the identical dot, so a change waiting on you looks the same
+  regardless of which application owns the topic. `sources` now reports
+  whether the team and flow facades are available at all, beside initiative's
+  existing flag.
 
 - **Per-tile display settings reset once.** `board_settings` became
   `initiative_settings` in local application metadata, so expand/collapse,

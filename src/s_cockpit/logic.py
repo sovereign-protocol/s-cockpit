@@ -55,11 +55,11 @@ def _session_transaction(method):
 COCKPIT_APPLICATION_ID = "cockpit"
 APP_METADATA_KEY = COCKPIT_APPLICATION_ID
 INITIATIVE_APPLICATION_ID = "initiative"
-INITIATIVE_FACADE_API_VERSION = 2
+INITIATIVE_FACADE_API_VERSION = 3
 TEAM_APPLICATION_ID = "team"
-TEAM_FACADE_API_VERSION = 2
+TEAM_FACADE_API_VERSION = 3
 FLOW_APPLICATION_ID = "flow"
-FLOW_FACADE_API_VERSION = 1
+FLOW_FACADE_API_VERSION = 2
 
 
 class FacadeLookup(Protocol):
@@ -126,7 +126,9 @@ class BoardOfBoardsLogic:
         except ValueError:
             return None
 
-    def _flow_summaries(self) -> list[dict]:
+    def _flow_summaries(
+        self, network_by_topic: dict[str, dict] | None = None,
+    ) -> list[dict]:
         flow = self._flow()
         if flow is None:
             return []
@@ -134,6 +136,17 @@ class BoardOfBoardsLogic:
         for process in flow.processes():
             summary = dict(flow.process_summary(process))
             summary["expanded"] = False
+            network = (
+                None if network_by_topic is None
+                else network_by_topic.get(process.uuid, {})
+            )
+            grouped = (
+                flow.collaboration_context(process.uuid, network)
+                .get("transition_by_node", {})
+            )
+            summary["_transition_by_node"] = grouped
+            summary["transition_count"] = self._transition_count(grouped)
+            summary["transition"] = self._aggregate_transition(grouped)
             summaries.append(summary)
         return summaries
 
@@ -154,16 +167,11 @@ class BoardOfBoardsLogic:
                 None if network_by_topic is None
                 else network_by_topic.get(node.uuid, {})
             )
-            events = (
-                team.transition_events(node.uuid)
-                if network is None
-                else team.transition_events(node.uuid, network)
+            grouped = (
+                team.collaboration_context(node.uuid, network)
+                .get("transition_by_node", {})
             )
-            grouped = team.transition_by_node(events)
-            unsettled = sum(
-                1 for value in grouped.values()
-                if value.get("type") not in (None, "in_agreement")
-            )
+            unsettled = self._transition_count(grouped)
             expanded = node.uuid in expanded_uuids
             classify = getattr(team, "is_organization", None)
             summaries.append({
@@ -177,6 +185,8 @@ class BoardOfBoardsLogic:
                     bool(classify(node)) if callable(classify) else True
                 ),
                 "unsettled_count": unsettled,
+                "transition_count": unsettled,
+                "transition": self._aggregate_transition(grouped),
                 "agenda_count": len(self._agenda_items(node.uuid)),
                 "expanded": expanded,
                 # A team is its team, its actors and its roles, and the
@@ -453,7 +463,7 @@ class BoardOfBoardsLogic:
         # application already knew.
         creatable = self.session.topic_kinds()
         teams = self._team_summaries(network_by_topic)
-        processes = self._flow_summaries()
+        processes = self._flow_summaries(network_by_topic)
         if facade is None:
             selected = self._selected_topic([], teams, processes)
             return {
@@ -472,6 +482,8 @@ class BoardOfBoardsLogic:
                         "available": False,
                         "reason": self._initiative_facade_error,
                     },
+                    TEAM_APPLICATION_ID: {"available": self._team() is not None},
+                    FLOW_APPLICATION_ID: {"available": self._flow() is not None},
                 },
             }
         initiatives = facade.initiatives()
@@ -523,7 +535,11 @@ class BoardOfBoardsLogic:
             "people": list(self._people_by_uuid().values()),
             "users": facade.users(),
             "selected_topic": selected,
-            "sources": {INITIATIVE_APPLICATION_ID: {"available": True}},
+            "sources": {
+                INITIATIVE_APPLICATION_ID: {"available": True},
+                TEAM_APPLICATION_ID: {"available": self._team() is not None},
+                FLOW_APPLICATION_ID: {"available": self._flow() is not None},
+            },
         }
 
     @_session_transaction
@@ -642,9 +658,8 @@ class BoardOfBoardsLogic:
             ),
         ]
 
-    @classmethod
     def merge_observations(
-        cls, snapshot: dict, observations: dict[str, dict],
+        self, snapshot: dict, observations: dict[str, dict],
     ) -> dict:
         """Decorate detached Session data with transport liveness."""
         payload = snapshot["payload"]
@@ -654,7 +669,7 @@ class BoardOfBoardsLogic:
         }
         for initiative in payload.get("initiatives", []):
             topic_uuid = initiative.get("uuid")
-            grouped = cls._filter_transition_groups(
+            grouped = self._filter_transition_groups(
                 initiative.pop("_transition_by_node", {}),
                 observations.get(topic_uuid, {}),
                 INITIATIVE_APPLICATION_ID,
@@ -663,6 +678,8 @@ class BoardOfBoardsLogic:
             initiative["discussion_count"] = len(
                 discussion_nodes.intersection(grouped)
             )
+            initiative["transition_count"] = self._transition_count(grouped)
+            initiative["transition"] = self._aggregate_transition(grouped)
             for card in [
                 *initiative.get("active_cards", []),
                 *initiative.get("next_cards", []),
@@ -682,15 +699,23 @@ class BoardOfBoardsLogic:
                 ]
         for team in payload.get("teams", []):
             topic_uuid = team.get("uuid")
-            grouped = cls._filter_transition_groups(
+            grouped = self._filter_transition_groups(
                 team.pop("_transition_by_node", {}),
                 observations.get(topic_uuid, {}),
                 TEAM_APPLICATION_ID,
             )
-            team["unsettled_count"] = sum(
-                1 for value in grouped.values()
-                if value.get("type") not in (None, "in_agreement")
+            team["unsettled_count"] = self._transition_count(grouped)
+            team["transition_count"] = self._transition_count(grouped)
+            team["transition"] = self._aggregate_transition(grouped)
+        for process in payload.get("processes", []):
+            topic_uuid = process.get("uuid")
+            grouped = self._filter_transition_groups(
+                process.pop("_transition_by_node", {}),
+                observations.get(topic_uuid, {}),
+                FLOW_APPLICATION_ID,
             )
+            process["transition_count"] = self._transition_count(grouped)
+            process["transition"] = self._aggregate_transition(grouped)
         selected = payload.get("selected_topic") or {}
         selected_uuid = selected.get("uuid")
         if selected_uuid and "transition_by_node" in payload:
@@ -699,41 +724,56 @@ class BoardOfBoardsLogic:
             )
             payload["transition_events"] = [
                 event for event in payload.get("transition_events", [])
-                if cls._transition_is_visible(
+                if self._transition_is_visible(
                     event, observations.get(selected_uuid, {}), policy,
                 )
             ]
-            payload["transition_by_node"] = cls._filter_transition_groups(
+            payload["transition_by_node"] = self._filter_transition_groups(
                 payload.get("transition_by_node", {}),
                 observations.get(selected_uuid, {}),
                 policy,
             )
         return payload
 
-    @classmethod
     def _filter_transition_groups(
-        cls, grouped: dict, network: dict, policy: str | None,
+        self, grouped: dict, network: dict, policy: str | None,
     ) -> dict:
-        filtered = {}
-        for node_uuid, group in grouped.items():
+        visible_events = []
+        for group in grouped.values():
             candidates = group.get("events") or [group]
-            visible = [
+            visible_events.extend(
                 event for event in candidates
-                if cls._transition_is_visible(event, network, policy)
-            ]
-            if not visible:
-                continue
-            top = max(
-                visible,
-                key=lambda event: tuple(
-                    event.get("priority") or Session.transition_rank(event),
-                ),
+                if self._transition_is_visible(event, network, policy)
             )
-            merged = dict(top)
-            if any(event.get("type") != "in_agreement" for event in visible):
-                merged["events"] = visible
-            filtered[node_uuid] = merged
-        return filtered
+        normalized = self.session.group_transition_events(visible_events)
+        for node_uuid, info in normalized.items():
+            original = grouped.get(node_uuid) or {}
+            if "reactable" in original:
+                info["reactable"] = bool(original["reactable"])
+        return normalized
+
+    @staticmethod
+    def _transition_count(grouped: dict) -> int:
+        return sum(
+            1 for value in grouped.values()
+            if value.get("type") not in (None, "in_agreement")
+            and value.get("stage") != "settled"
+        )
+
+    def _aggregate_transition(self, grouped: dict) -> dict | None:
+        candidates = [
+            value for value in grouped.values()
+            if value.get("type") not in (None, "in_agreement")
+            and value.get("stage") != "settled"
+        ]
+        if not candidates:
+            return None
+        leading = max(candidates, key=self.session.transition_rank)
+        return {
+            "stage": leading.get("stage"),
+            "type": leading.get("type"),
+            "priority": leading.get("priority"),
+        }
 
     @staticmethod
     def _transition_is_visible(
@@ -756,8 +796,9 @@ class BoardOfBoardsLogic:
         columns = self.initiative.columns(initiative)
         columns_by_uuid = {column.uuid: column for column in columns}
         people_by_uuid = self._people_by_uuid()
-        transition_by_node = self.initiative.transition_by_node(
-            self.initiative.transition_events(initiative.uuid, network)
+        transition_by_node = (
+            self.initiative.collaboration_context(initiative.uuid, network)
+            .get("transition_by_node", {})
         )
         active_uuid = settings.get("active_column_uuid")
         next_uuid = settings.get("next_column_uuid")
@@ -808,6 +849,8 @@ class BoardOfBoardsLogic:
             "order": int(settings.get("order", 0) or 0),
             "card_count": card_count,
             "discussion_count": len(discussion_nodes),
+            "transition_count": self._transition_count(transition_by_node),
+            "transition": self._aggregate_transition(transition_by_node),
             "agenda_count": len(self._agenda_items(initiative.uuid)),
             "column_count": len(columns),
             "columns": [
@@ -1062,18 +1105,21 @@ class BoardOfBoardsLogic:
             if facade else SessionResult("error", reason=self._initiative_facade_error)
         )
 
-    def react_to_initiative_node(
-        self, source_addr: str, node_uuid: str, reaction: str,
+    def react_to_node(
+        self, application_id: str, source_addr: str, node_uuid: str, reaction: str,
         absent: bool = False,
     ) -> SessionResult:
-        facade = self._initiative()
+        facade_getter = {
+            INITIATIVE_APPLICATION_ID: self._initiative,
+            TEAM_APPLICATION_ID: self._team,
+            FLOW_APPLICATION_ID: self._flow,
+        }.get(application_id)
+        if facade_getter is None:
+            return SessionResult("error", reason="unknown application")
+        facade = facade_getter()
         if not facade:
-            return SessionResult("error", reason=self._initiative_facade_error)
-        if reaction == "rollback":
-            return facade.rollback_peer_node(
-                source_addr, node_uuid, absent,
-            )
-        return facade.accept_peer_node(source_addr, node_uuid, absent)
+            return SessionResult("error", reason=f"{application_id} is not active")
+        return facade.react_to_node(source_addr, node_uuid, reaction, absent)
 
     def drop_topic(self, topic_uuid: str) -> SessionResult:
         """Stop holding a topic without destroying it.

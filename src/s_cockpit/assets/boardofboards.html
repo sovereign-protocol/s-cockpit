@@ -321,7 +321,7 @@
         );
       }
 
-      function topicTitle(applicationId, text, href) {
+      function topicTitle(applicationId, text, href, topic = null) {
         const title = document.createElement("a");
         title.className = "bob-board-title";
         title.href = href;
@@ -333,6 +333,14 @@
         const label = document.createElement("span");
         label.textContent = text;
         title.append(icon, label);
+        if (topic?.transition) {
+          const count = Number(topic.transition_count) || 1;
+          const marker = SovereignUI.transitionMarker(topic.transition, {
+            className: "bob-tile-transition",
+            title: `${count} ${count === 1 ? "element is" : "elements are"} in transition; the dot shows the highest-priority stage.`,
+          });
+          if (marker) title.append(marker);
+        }
         return title;
       }
 
@@ -358,6 +366,7 @@
             "flow",
             process.title || "Untitled flow",
             SovereignShell.topicHref("flow", process.uuid),
+            process,
           ),
         );
         const stage = document.createElement("p");
@@ -425,6 +434,7 @@
           "team",
           team.title || "Untitled team",
           SovereignShell.topicHref("team", team.uuid),
+          team,
         );
         main.append(title);
         header.append(main);
@@ -648,6 +658,7 @@
           "initiative",
           initiative.name,
           SovereignShell.topicHref("initiative", initiative.uuid),
+          initiative,
         );
         main.append(title, objectiveElement(initiative));
         header.append(main);
@@ -743,9 +754,7 @@
       // This includes incoming work and changes that are merely awaiting a
       // peer, so it must not imply that every item is ours to resolve.
       function transitionItem(count) {
-        const item = statItem(count || 0, "in transition");
-        if (count > 0) item.classList.add("bob-stat-divergence");
-        return item;
+        return statItem(count || 0, "in transition");
       }
 
       function renderBand(label, initiative, cards) {
@@ -842,42 +851,38 @@
       }
 
       function applyCardTransition(row, card) {
-        const info = card.transition;
-        if (!info || info.stage === "settled") return;
-        row.classList.add("diff", `stage-${info.stage}`);
-        row.title = transitionLabel(info);
+        SovereignUI.decorateTransition(row, card.transition);
       }
 
       function cardDiscussionTools(card) {
         const wrap = document.createElement("div");
         wrap.className = "bob-card-discussion-tools";
         const info = card.transition;
-        if (!info || ["settled", "in_flight"].includes(info.stage)) return wrap;
+        if (!info || info.reactable === false) return wrap;
         // The control is Core's, so a divergence offers the same acts, worded
         // the same way, whether it is met here or in the application itself.
         const control = SovereignUI.reactionControl({
           info,
+          density: "inline",
           className: "bob-react",
-          onReact: (choice) => applyReaction(card.uuid, choice),
+          onReact: (choice) => applyReaction(card.uuid, choice, "initiative"),
         });
         if (control) wrap.append(control);
         return wrap;
       }
 
-      async function applyReaction(uuid, choice) {
-        const endpoint =
-          choice.action === "rollback"
-            ? "/api/cockpit/initiative/rollback"
-            : "/api/cockpit/initiative/adopt";
+      async function applyReaction(uuid, choice, applicationId = "") {
+        applicationId = applicationId || state?.selected_topic?.application_id || "";
         await run(
           (request) =>
-            request(endpoint, {
+            request("/api/cockpit/react", {
+              application_id: applicationId,
               source_addr: choice.peerAddr,
               node_uuid: uuid,
-              adopt_absence: choice.action === "adopt" && choice.absent,
-              rollback_absence: choice.action === "rollback" && choice.absent,
+              reaction: choice.action,
+              absent: choice.absent,
             }),
-          choice.action === "rollback" ? "Rolled back" : "Adopted",
+          choice.action === "rollback" ? "Taken back" : "Adopted",
         );
       }
 
@@ -1473,11 +1478,11 @@
             : null,
         autoAdoptLabels: AUTO_ADOPT_LABELS,
         autoAdoptDescriptions: AUTO_ADOPT_DESCRIPTIONS,
-        // Reacting from the pane is offered only where the Cockpit has routes
-        // to honour it. It carries an initiative's decisions; a team's or a
-        // process's are settled in that application, so their divergences stay
-        // shown here and answered there.
-        canReact: () => state?.selected_topic?.application_id === "initiative",
+        // A route without its owning facade would bypass neither governance
+        // nor failure: it simply cannot honour the act, so no control appears.
+        canReact: () => Boolean(
+          state?.sources?.[state?.selected_topic?.application_id]?.available,
+        ),
         reactNode: (uuid, choice) => applyReaction(uuid, choice),
         sessionView,
         onChanged: () => load(),

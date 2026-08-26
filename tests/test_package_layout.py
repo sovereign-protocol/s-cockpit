@@ -227,6 +227,12 @@ class AssetTests(unittest.TestCase):
             for pattern in ('href = `/?', 'href="/?', "href='/?"):
                 self.assertNotIn(pattern, line, f"boardofboards.html:{number}")
 
+    def test_aggregate_tiles_use_a_core_marker_not_a_changed_tile(self):
+        self.assertIn(
+            "SovereignUI.transitionMarker(topic.transition", self.cockpit,
+        )
+        self.assertIn("highest-priority stage", self.cockpit)
+
     def test_the_page_only_reads_payload_keys_the_logic_writes(self):
         # The tile families are a contract with the page and are not the node
         # types behind them - "initiatives" here carries `initiative` roots the

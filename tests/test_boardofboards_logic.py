@@ -28,11 +28,11 @@ class _FacadeLookup:
         self.flow = flow
 
     def find(self, application_id, facade_api_version):
-        if application_id == "initiative" and facade_api_version == 2:
+        if application_id == "initiative" and facade_api_version == 3:
             return self.initiative
-        if application_id == "team" and facade_api_version == 2:
+        if application_id == "team" and facade_api_version == 3:
             return self.team
-        if application_id == "flow" and facade_api_version == 1:
+        if application_id == "flow" and facade_api_version == 2:
             return self.flow
         return None
 
@@ -146,9 +146,6 @@ class _StubTeamFacade:
     def transition_events(self, team_uuid, network=None):
         self.observed_networks.append(network)
         return []
-
-    def transition_by_node(self, events):
-        return {}
 
     def collaboration_context(self, topic_uuid, network=None):
         self.observed_networks.append(network)
@@ -593,6 +590,8 @@ class BoardOfBoardsLogicTests(unittest.TestCase):
 
         summary = bob.summary_payload()["initiatives"][0]
         self.assertEqual(summary["discussion_count"], 1)
+        self.assertEqual(summary["transition_count"], 1)
+        self.assertEqual(summary["transition"]["stage"], "awaiting_peer")
         self.assertEqual(summary["column_count"], 3)
         transition = summary["active_cards"][0]["transition"]
         # My own edit that the peer has observed but not answered: the
