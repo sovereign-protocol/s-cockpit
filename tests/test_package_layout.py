@@ -12,6 +12,7 @@ hard dependency on one of them by accident.
 
 import ast
 import importlib.metadata
+import re
 import unittest
 from importlib.resources import files
 from pathlib import Path
@@ -73,7 +74,7 @@ class PackagingTests(unittest.TestCase):
             controller,
         )
 
-    def test_distribution_has_no_kanban_dependency(self):
+    def test_distribution_has_no_initiative_dependency(self):
         # A5: S-Initiative is an optional, late-bound producer. The moment it
         # appears in `dependencies`, installing the Cockpit drags it in and
         # the optionality the architecture rests on is gone.
@@ -226,14 +227,48 @@ class AssetTests(unittest.TestCase):
             for pattern in ('href = `/?', 'href="/?', "href='/?"):
                 self.assertNotIn(pattern, line, f"boardofboards.html:{number}")
 
+    def test_aggregate_tiles_use_a_core_marker_not_a_changed_tile(self):
+        self.assertIn(
+            "SovereignUI.transitionMarker(topic.transition", self.cockpit,
+        )
+        self.assertIn("highest-priority stage", self.cockpit)
+
+    def test_the_page_only_reads_payload_keys_the_logic_writes(self):
+        # The tile families are a contract with the page and are not the node
+        # types behind them - "initiatives" here carries `initiative` roots the
+        # way "teams" carries teams. S-Team renamed keys and types together
+        # once and the page silently read `undefined`, so the keys are checked
+        # from the page's side rather than only from the logic's.
+        source = (ROOT / "src" / "s_cockpit" / "logic.py").read_text(
+            encoding="utf-8",
+        )
+        written = set()
+        for node in ast.walk(ast.parse(source)):
+            if not isinstance(node, ast.FunctionDef):
+                continue
+            if node.name != "tiles_payload":
+                continue
+            for inner in ast.walk(node):
+                if isinstance(inner, ast.Return) and isinstance(inner.value, ast.Dict):
+                    written |= {
+                        key.value for key in inner.value.keys
+                        if isinstance(key, ast.Constant)
+                    }
+        self.assertLessEqual({"initiatives", "teams", "processes"}, written)
+        read = set(re.findall(r"state\??\.([a-z_]+)", self.cockpit))
+        self.assertTrue(read)
+        self.assertEqual(read - written, set())
+
     def test_people_and_multi_type_add_use_the_shared_ui_primitives(self):
         self.assertIn("SovereignUI.avatar", self.cockpit)
         self.assertIn('class="ui-button"', self.cockpit)
         self.assertIn("SovereignUI.actionMenu", self.cockpit)
         self.assertNotIn('id="addNewMenu"', self.cockpit)
-        self.assertIn('content.querySelector("#addNewBtn")', self.cockpit)
-        self.assertIn("SovereignShell.setAppActions(addNew)", self.cockpit)
         self.assertIn("+ Add new…", self.cockpit)
+        # U7: the shell's bar holds no application controls, so this one sits
+        # in the Cockpit's own page beside the tiles it adds to.
+        self.assertNotIn("setAppActions", self.cockpit)
+        self.assertIn('class="bob-toolbar"', self.cockpit)
 
     def test_selection_controls_use_the_shared_native_select_contract(self):
         self.assertIn("SovereignUI.selectionField", self.cockpit)
@@ -241,16 +276,26 @@ class AssetTests(unittest.TestCase):
         self.assertIn("SovereignUI.selectOptions", self.cockpit)
         self.assertIn('class="ui-select"', self.cockpit)
 
-    def test_cross_application_links_name_the_target_asset_prefix(self):
-        self.assertIn("/apps/initiative?board=", self.cockpit)
-        self.assertIn("/apps/flow?process_uuid=", self.cockpit)
+    def test_cross_application_links_ask_the_shell_for_the_route(self):
+        # A tile opens another application's topic without naming its route:
+        # the shell composes that from what the host reports is running, so
+        # an application deactivated here loses its links instead of keeping
+        # ones that go nowhere.
+        for application_id in ("initiative", "team", "flow"):
+            self.assertIn(
+                f'SovereignShell.topicHref("{application_id}"', self.cockpit,
+            )
+        for route in ("/apps/initiative?", "/apps/flow?", "/apps/team?"):
+            self.assertNotIn(route, self.cockpit)
 
     def test_flow_tiles_have_template_creation_and_owner_deletion_controls(self):
-        self.assertIn('id="newFlowModal"', self.cockpit)
-        self.assertIn('id="newFlowName"', self.cockpit)
-        self.assertIn('id="newFlowTemplate"', self.cockpit)
-        self.assertIn("state.flow_templates", self.cockpit)
-        self.assertIn("/api/cockpit/flow/processes/create", self.cockpit)
+        # Making one is the shell's dialog over Core's routing, and which
+        # workflows there are is S-Flow's answer - neither the list nor the
+        # rule that a process must have one is restated here.
+        self.assertIn("SovereignShell.openNewTopicDialog", self.cockpit)
+        self.assertIn("/api/cockpit/topics/create", self.cockpit)
+        self.assertNotIn("state.flow_templates", self.cockpit)
+        self.assertNotIn("/api/cockpit/flow/processes/create", self.cockpit)
         self.assertIn("/api/cockpit/flow/processes/delete", self.cockpit)
         self.assertIn("/api/cockpit/flow/processes/leave", self.cockpit)
         self.assertIn("process.can_delete", self.cockpit)
@@ -261,30 +306,33 @@ class AssetTests(unittest.TestCase):
         self.assertIn(".s-snapshot", self.cockpit)
         self.assertIn("showSaveFilePicker", self.cockpit)
         self.assertNotIn('accept: {"application/json": [".s-snapshot"]}', self.cockpit)
-        self.assertIn("Load snapshot file...", self.cockpit)
-        for application in ("kanban", "team", "flow"):
-            for action in ("export", "create"):
-                self.assertIn(
-                    f"/api/cockpit/{application}/snapshots/{action}",
+        # Loading one is the shell's dialog, and every kind accepts the
+        # snapshot of its own application - so no kind loses the offer, and
+        # a fourth gets it without a line here.
+        self.assertIn("snapshotType: kind.application_id", self.cockpit)
+        self.assertIn("/api/cockpit/topics/create", self.cockpit)
+        for application in ("initiative", "team", "flow"):
+            self.assertIn(
+                f"/api/cockpit/{application}/snapshots/export", self.cockpit,
+            )
+            for gone in ("create", "delete"):
+                self.assertNotIn(
+                    f"/api/cockpit/{application}/snapshots/{gone}",
                     self.cockpit,
                 )
-            self.assertNotIn(
-                f"/api/cockpit/{application}/snapshots/delete",
-                self.cockpit,
-            )
 
     def test_root_team_creation_and_expansion_use_organization_wording(self):
-        self.assertIn("<h2>New Organization</h2>", self.cockpit)
-        self.assertIn('placeholder="Untitled organization"', self.cockpit)
-        self.assertNotIn('value="Untitled organization"', self.cockpit)
-        self.assertIn('"Organization created"', self.cockpit)
+        # "Organization" is S-Team's own word for a root team, registered
+        # with Core beside the rest of what making one needs. This page
+        # reports whatever came back rather than deciding the word.
+        self.assertIn("`${kind.noun} created`", self.cockpit)
         self.assertIn(
             'team.is_organization ? "Organization" : "Team"',
             self.cockpit,
         )
 
     def test_assets_do_not_call_producer_controller_namespaces(self):
-        self.assertNotIn("/api/kanban", self.cockpit)
+        self.assertNotIn("/api/initiative", self.cockpit)
         self.assertNotIn("/api/team", self.cockpit)
         self.assertNotIn("/api/flow", self.cockpit)
 
@@ -300,7 +348,7 @@ class AssetTests(unittest.TestCase):
         self.assertIn('count.className = "bob-band-count"', self.cockpit)
         self.assertIn("heading.append(title, count, sources)", self.cockpit)
         self.assertNotIn("involving you", self.cockpit)
-        status_start = self.cockpit.index("function boardStatus(board)")
+        status_start = self.cockpit.index("function initiativeStatus(initiative)")
         status_end = self.cockpit.index("function statItem", status_start)
         status_source = self.cockpit[status_start:status_end]
         self.assertNotIn("active_cards", status_source)
@@ -313,15 +361,23 @@ class AssetTests(unittest.TestCase):
     def test_objectives_and_agenda_text_use_the_shared_editor(self):
         self.assertIn("SovereignUI.editableText", self.cockpit)
         self.assertNotIn('div.contentEditable = "true"', self.cockpit)
-        for application in ("team", "kanban", "flow"):
+        for application in ("team", "initiative", "flow"):
             self.assertIn(
                 f'update: "/api/cockpit/{application}/agenda/update"',
                 self.cockpit,
             )
 
-    def test_creation_name_defaults_are_placeholders(self):
+    def test_creation_asks_core_what_can_be_made_and_the_shell_how(self):
+        # Every noun, every template list and every create route was written
+        # out here three times. Core answers the first two from what each
+        # application registered, the shell owns the dialog, and one route
+        # makes any of them - so this page names no kind at all.
+        self.assertIn("noun: kind.noun", self.cockpit)
+        self.assertIn("templateRequired: kind.template_required", self.cockpit)
+        self.assertIn("state.creatable", self.cockpit)
+        for noun in ("Initiative", "Organization", "Flow"):
+            self.assertNotIn(f'noun: "{noun}"', self.cockpit)
         for default in ("Untitled initiative", "Untitled organization", "Untitled flow"):
-            self.assertIn(f'placeholder="{default}"', self.cockpit)
             self.assertNotIn(f'value="{default}"', self.cockpit)
 
     def test_cockpit_uses_the_shared_optimistic_session_view(self):

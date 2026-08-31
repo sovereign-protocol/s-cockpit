@@ -9,13 +9,14 @@
   </head>
   <body>
     <div id="toast" class="toast"></div>
-    <!-- The shell owns the bar; "+ Add new…" is handed to its
-         application-actions slot. -->
+    <!-- The shell owns the bar and holds nothing of an application's (U7). -->
     <header class="bob-topbar"><div id="shell"></div></header>
 
-    <template id="cockpitHeaderControls">
+    <!-- Making a topic starts where the new one will belong; this is for one
+         that belongs to nothing. It sits with the tiles it adds to. -->
+    <div class="bob-toolbar">
       <button id="addNewBtn" class="ui-button">+ Add new…</button>
-    </template>
+    </div>
 
     <main id="boards" class="bob-boards"></main>
 
@@ -37,15 +38,16 @@
       </form>
     </dialog>
 
-    <dialog id="boardSettingsModal">
+    <dialog id="initiativeSettingsModal">
       <div class="bob-manage">
-        <h2 id="boardSettingsTitle">Initiative settings</h2>
-        <div id="boardSettingsFields"></div>
+        <h2 id="initiativeSettingsTitle">Initiative settings</h2>
+        <div id="initiativeSettingsFields"></div>
         <menu>
-          <button type="button" id="saveBoardSnapshotBtn">Save snapshot...</button>
-          <button type="button" id="deleteBoardSettingsBtn" class="danger">Delete initiative</button>
-          <button type="button" id="cancelBoardSettingsBtn">Cancel</button>
-          <button type="button" id="saveBoardSettingsBtn" class="primary">Save</button>
+          <button type="button" id="saveInitiativeSnapshotBtn">Save snapshot...</button>
+          <button type="button" id="dropInitiativeBtn">Stop holding it</button>
+          <button type="button" id="deleteInitiativeSettingsBtn" class="danger">Delete initiative</button>
+          <button type="button" id="cancelInitiativeSettingsBtn">Cancel</button>
+          <button type="button" id="saveInitiativeSettingsBtn" class="primary">Save</button>
         </menu>
       </div>
     </dialog>
@@ -59,6 +61,7 @@
         </p>
         <menu>
           <button type="button" id="saveTeamSnapshotBtn">Save snapshot...</button>
+          <button type="button" id="dropTeamBtn">Stop holding it</button>
           <button type="button" id="deleteTeamBtn" class="danger">Delete team</button>
           <button type="button" id="cancelTeamSettingsBtn">Cancel</button>
         </menu>
@@ -77,54 +80,9 @@
       </div>
     </dialog>
 
-    <dialog id="newBoardModal">
-      <form method="dialog" id="newBoardForm">
-        <h2>New Initiative</h2>
-        <label>Name<input id="newBoardName" class="ui-text-field"
-                          placeholder="Untitled initiative" /></label>
-        <label>Create from<select id="newBoardTemplate" class="ui-select"></select></label>
-        <button type="button" id="loadBoardSnapshotBtn">Load snapshot file...</button>
-        <input type="file" id="boardSnapshotFile" accept=".s-snapshot,application/json" hidden />
-        <p id="boardSnapshotFileStatus" class="bob-hint"></p>
-        <menu>
-          <button type="button" id="cancelNewBoardBtn">Cancel</button>
-          <button type="submit" class="primary">Create</button>
-        </menu>
-      </form>
-    </dialog>
-
-    <dialog id="newTeamModal">
-      <form method="dialog" id="newTeamForm">
-        <h2>New Organization</h2>
-        <label>Name<input id="newTeamName" class="ui-text-field"
-                          placeholder="Untitled organization" /></label>
-        <label>Create from<select id="newTeamTemplate" class="ui-select"></select></label>
-        <button type="button" id="loadTeamSnapshotBtn">Load snapshot file...</button>
-        <input type="file" id="teamSnapshotFile" accept=".s-snapshot,application/json" hidden />
-        <p id="teamSnapshotFileStatus" class="bob-hint"></p>
-        <menu>
-          <button type="button" id="cancelNewTeamBtn">Cancel</button>
-          <button type="submit" class="primary">Create</button>
-        </menu>
-      </form>
-    </dialog>
-
-    <dialog id="newFlowModal">
-      <form method="dialog" id="newFlowForm">
-        <h2>New Flow</h2>
-        <label>Name<input id="newFlowName" class="ui-text-field"
-                          placeholder="Untitled flow" /></label>
-        <label>Create from<select id="newFlowTemplate" class="ui-select" required></select></label>
-        <p id="newFlowTemplateDescription" class="bob-hint"></p>
-        <button type="button" id="loadFlowSnapshotBtn">Load snapshot file...</button>
-        <input type="file" id="flowSnapshotFile" accept=".s-snapshot,application/json" hidden />
-        <p id="flowSnapshotFileStatus" class="bob-hint"></p>
-        <menu>
-          <button type="button" id="cancelNewFlowBtn">Cancel</button>
-          <button type="submit" class="primary">Create</button>
-        </menu>
-      </form>
-    </dialog>
+    <!-- Making an initiative, an organization or a flow is one dialog the
+         shell owns (SovereignShell.openNewTopicDialog). These were three
+         copies of it here, differing only in the noun. -->
 
     <dialog id="confirmModal">
       <h2 id="confirmModalTitle">Action</h2>
@@ -147,35 +105,39 @@
       let modalPerspectiveOptions = [];
       let modalLocalDraft = null;
       let modalReadOnlyPerspective = false;
-      let settingsBoard = null;
+      let settingsInitiative = null;
       let settingsTeam = null;
       let settingsFlow = null;
-      const snapshotImports = {initiative: null, team: null, flow: null};
+      // Only the two modes Core does not know about; "always" and "never"
+      // are worded by Core and inherited (DESIGN_VOCABULARY.md).
       const AUTO_ADOPT_LABELS = {
-        always: "Always",
         not_owner: "Except cards I own",
         not_member: "Except cards I'm on",
-        never: "Never",
       };
       const AUTO_ADOPT_DESCRIPTIONS = {
-        always: "Peer changes are automatically adopted into every card.",
-        not_owner: "Peer changes are automatically adopted, except on cards you own.",
-        not_member: "Peer changes are automatically adopted, except on cards you're a member of.",
-        never: "Peer changes wait for you to review and adopt them.",
+        not_owner: "Changes from other people are adopted automatically, except on cards you own.",
+        not_member:
+          "Changes from other people are adopted automatically, except on cards you're a member of.",
       };
+      // A second copy of every application's mark, kept in step with the
+      // manifests by hand. See U8 - the drawings are recorded there, and a
+      // tile that shows a different mark from the header it opens is the
+      // same divergence U1 predicts, arriving in pictures.
       const APP_ICONS = {
-        kanban:
-          '<rect x="4" y="4" width="4" height="16" rx="1"></rect>' +
-          '<rect x="10" y="4" width="4" height="11" rx="1"></rect>' +
-          '<rect x="16" y="4" width="4" height="7" rx="1"></rect>',
+        initiative:
+          '<rect x="4" y="4" width="6" height="14" rx="2"></rect>' +
+          '<rect x="14" y="4" width="6" height="8" rx="2"></rect>' +
+          '<path d="M5.5 7.5h3"></path><path d="M15.5 7.5h3"></path>',
         team:
-          '<path d="M6 3h8l4 4v14H6z"></path>' +
-          '<path d="M14 3v4h4"></path><path d="M9 13h6"></path>' +
-          '<path d="M9 17h6"></path>',
+          '<rect x="9" y="3" width="6" height="5" rx="1"></rect>' +
+          '<rect x="3" y="16" width="6" height="5" rx="1"></rect>' +
+          '<rect x="15" y="16" width="6" height="5" rx="1"></rect>' +
+          '<path d="M12 8v4"></path><path d="M6 16v-4h12v4"></path>',
         flow:
-          '<path d="M5 4h14v16H5z"></path>' +
-          '<path d="M8 9l2 2 5-5"></path>' +
-          '<path d="M8 15h8"></path>',
+          '<circle cx="5" cy="12" r="2"></circle>' +
+          '<circle cx="12" cy="12" r="2"></circle>' +
+          '<circle cx="19" cy="12" r="2"></circle>' +
+          '<path d="M7 12h3"></path><path d="M14 12h3"></path>',
       };
       const el = (id) => document.getElementById(id);
 
@@ -190,7 +152,7 @@
         });
       sessionView.subscribe((nextState, _pending, event) => {
         state = nextState;
-        if (!Array.isArray(state.boards)) return;
+        if (!Array.isArray(state.initiatives)) return;
         if (event.change === "state" || event.change === "tiles") {
           render();
         }
@@ -250,7 +212,7 @@
         container.replaceChildren();
         const teams = state.teams || [];
         const processes = state.processes || [];
-        if (!state.boards.length && !teams.length && !processes.length) {
+        if (!state.initiatives.length && !teams.length && !processes.length) {
           const empty = document.createElement("p");
           empty.className = "bob-empty";
           empty.textContent = "Nothing yet - use “+ Add new”.";
@@ -268,7 +230,7 @@
               ? renderExpandedTeam(tile, index, expanded.length)
               : tile.application_id === "flow"
                 ? renderFlowTile(tile, index, expanded.length)
-                : renderExpandedBoard(tile, index, expanded.length),
+                : renderExpandedInitiative(tile, index, expanded.length),
           );
         });
         chunk(collapsed, 5).forEach((group, chunkIndex) => {
@@ -280,7 +242,7 @@
                 ? renderTeamTile(tile, chunkIndex * 5 + i, collapsed.length)
                 : tile.application_id === "flow"
                   ? renderFlowTile(tile, chunkIndex * 5 + i, collapsed.length)
-                  : renderCollapsedBoard(tile, chunkIndex * 5 + i, collapsed.length),
+                  : renderCollapsedInitiative(tile, chunkIndex * 5 + i, collapsed.length),
             ),
           );
           container.append(lane);
@@ -298,12 +260,7 @@
         const link = document.createElement("a");
         link.className = "shell-topic-name";
         link.textContent = topic.title;
-        link.href =
-          topic.application_id === "team"
-            ? `/apps/team?team=${encodeURIComponent(topic.uuid)}`
-            : topic.application_id === "flow"
-              ? `/apps/flow?process_uuid=${encodeURIComponent(topic.uuid)}`
-              : `/apps/initiative?board=${encodeURIComponent(topic.uuid)}`;
+        link.href = SovereignShell.topicHref(topic.application_id, topic.uuid);
         SovereignShell.setTopicRegion(link);
       }
 
@@ -326,7 +283,7 @@
           project: (draft, nextTopic) => {
             draft.selected_topic = nextTopic;
             for (const entry of [
-              ...(draft.boards || []),
+              ...(draft.initiatives || []),
               ...(draft.teams || []),
               ...(draft.processes || []),
             ]) {
@@ -351,7 +308,7 @@
       function tilesInDisplayOrder() {
         const order = new Map((state.tile_order || []).map((uuid, index) => [uuid, index]));
         return [
-          ...(state.boards || []),
+          ...(state.initiatives || []),
           ...(state.teams || []),
           ...(state.processes || []),
         ].sort(
@@ -364,7 +321,7 @@
         );
       }
 
-      function topicTitle(applicationId, text, href) {
+      function topicTitle(applicationId, text, href, topic = null) {
         const title = document.createElement("a");
         title.className = "bob-board-title";
         title.href = href;
@@ -376,6 +333,14 @@
         const label = document.createElement("span");
         label.textContent = text;
         title.append(icon, label);
+        if (topic?.transition) {
+          const count = Number(topic.transition_count) || 1;
+          const marker = SovereignUI.transitionMarker(topic.transition, {
+            className: "bob-tile-transition",
+            title: `${count} ${count === 1 ? "element is" : "elements are"} in transition; the dot shows the highest-priority stage.`,
+          });
+          if (marker) title.append(marker);
+        }
         return title;
       }
 
@@ -400,7 +365,8 @@
           topicTitle(
             "flow",
             process.title || "Untitled flow",
-            `/apps/flow?process_uuid=${encodeURIComponent(process.uuid)}`,
+            SovereignShell.topicHref("flow", process.uuid),
+            process,
           ),
         );
         const stage = document.createElement("p");
@@ -456,7 +422,7 @@
         return panel;
       }
 
-      // The same header a board gets: move, enlarge/collapse, share,
+      // The same header an initiative gets: move, enlarge/collapse, share,
       // settings, and the counts underneath. The two topic kinds differ in
       // what enlarging shows, not in what a tile offers.
       function agreementHeader(team, index, total) {
@@ -467,7 +433,8 @@
         const title = topicTitle(
           "team",
           team.title || "Untitled team",
-          `/apps/team?team=${encodeURIComponent(team.uuid)}`,
+          SovereignShell.topicHref("team", team.uuid),
+          team,
         );
         main.append(title);
         header.append(main);
@@ -664,50 +631,51 @@
         });
       }
 
-      function renderExpandedBoard(board, index, total) {
+      function renderExpandedInitiative(initiative, index, total) {
         const panel = document.createElement("section");
         panel.className = "bob-board expanded";
-        makeTopicSelectable(panel, board);
-        panel.append(boardHeader(board, true, index, total));
-        panel.append(renderBand("Active", board, board.active_cards));
-        panel.append(renderBand("Next", board, board.next_cards));
+        makeTopicSelectable(panel, initiative);
+        panel.append(initiativeHeader(initiative, true, index, total));
+        panel.append(renderBand("Active", initiative, initiative.active_cards));
+        panel.append(renderBand("Next", initiative, initiative.next_cards));
         return panel;
       }
 
-      function renderCollapsedBoard(board, index, total) {
+      function renderCollapsedInitiative(initiative, index, total) {
         const tile = document.createElement("section");
         tile.className = "bob-board collapsed";
-        makeTopicSelectable(tile, board);
-        tile.append(boardHeader(board, false, index, total));
+        makeTopicSelectable(tile, initiative);
+        tile.append(initiativeHeader(initiative, false, index, total));
         return tile;
       }
 
-      function boardHeader(board, expanded, index = 0, total = 1) {
+      function initiativeHeader(initiative, expanded, index = 0, total = 1) {
         const header = document.createElement("div");
         header.className = "bob-board-header";
         const main = document.createElement("div");
         main.className = "bob-board-main";
         const title = topicTitle(
-          "kanban",
-          board.name,
-          `/apps/initiative?board=${encodeURIComponent(board.uuid)}`,
+          "initiative",
+          initiative.name,
+          SovereignShell.topicHref("initiative", initiative.uuid),
+          initiative,
         );
-        main.append(title, objectiveElement(board));
+        main.append(title, objectiveElement(initiative));
         header.append(main);
         const tools = document.createElement("div");
         tools.className = "bob-board-tools";
         const controls = document.createElement("div");
         controls.className = "bob-board-controls";
-        controls.append(moveButton("<", index === 0, () => moveTile(board, -1)));
-        controls.append(moveButton(">", index >= total - 1, () => moveTile(board, 1)));
+        controls.append(moveButton("<", index === 0, () => moveTile(initiative, -1)));
+        controls.append(moveButton(">", index >= total - 1, () => moveTile(initiative, 1)));
         if (expanded) {
-          controls.append(iconButton(ICON_COLLAPSE, "Collapse", () => setExpanded(board, false)));
+          controls.append(iconButton(ICON_COLLAPSE, "Collapse", () => setExpanded(initiative, false)));
         } else {
-          controls.append(iconButton(ICON_EXPAND, "Expand", () => setExpanded(board, true)));
+          controls.append(iconButton(ICON_EXPAND, "Expand", () => setExpanded(initiative, true)));
         }
-        controls.append(iconButton(ICON_SHARE, "Share", () => openShareModal(board)));
-        controls.append(iconButton(ICON_SETTINGS, "Settings", () => openBoardSettings(board)));
-        tools.append(controls, boardStatus(board));
+        controls.append(iconButton(ICON_SHARE, "Share", () => openShareModal(initiative)));
+        controls.append(iconButton(ICON_SETTINGS, "Settings", () => openInitiativeSettings(initiative)));
+        tools.append(controls, initiativeStatus(initiative));
         header.append(tools);
         return header;
       }
@@ -736,7 +704,7 @@
         return button;
       }
 
-      function objectiveElement(board) {
+      function objectiveElement(initiative) {
         // A fixed-height 2-line box, bottom-aligned: short objectives sit
         // low (away from the title above), longer ones fill both lines and
         // reach up near the title. Line-clamp+ellipsis only applies while
@@ -747,15 +715,15 @@
         div.className = "bob-objective";
         SovereignUI.editableText({
           element: div,
-          value: board.objective || "",
+          value: initiative.objective || "",
           placeholder: "Set an objective...",
           ariaLabel: "Initiative objective",
           allowEmpty: true,
           titleFromValue: true,
           onCommit: (value) => run(
             (request) =>
-              request("/api/cockpit/kanban/boards/set_objective", {
-                board_uuid: board.uuid,
+              request("/api/cockpit/initiative/initiatives/set_objective", {
+                initiative_uuid: initiative.uuid,
                 objective: value,
               }),
             "Objective updated",
@@ -766,12 +734,12 @@
         return wrap;
       }
 
-      function boardStatus(board) {
+      function initiativeStatus(initiative) {
         const status = document.createElement("div");
         status.className = "bob-board-status";
         status.append(
-          transitionItem(board.discussion_count),
-          statItem(board.agenda_count, "agenda"),
+          transitionItem(initiative.discussion_count),
+          statItem(initiative.agenda_count, "agenda"),
         );
         return status;
       }
@@ -786,12 +754,10 @@
       // This includes incoming work and changes that are merely awaiting a
       // peer, so it must not imply that every item is ours to resolve.
       function transitionItem(count) {
-        const item = statItem(count || 0, "in transition");
-        if (count > 0) item.classList.add("bob-stat-divergence");
-        return item;
+        return statItem(count || 0, "in transition");
       }
 
-      function renderBand(label, board, cards) {
+      function renderBand(label, initiative, cards) {
         const wrap = document.createElement("div");
         wrap.className = "bob-band";
         const heading = document.createElement("h3");
@@ -802,7 +768,7 @@
         count.textContent = cards.length;
         const sources = document.createElement("span");
         sources.className = "bob-band-sources";
-        sources.textContent = `(${bandColumnNames(board, label).join(", ") || "not set"})`;
+        sources.textContent = `(${bandColumnNames(initiative, label).join(", ") || "not set"})`;
         heading.append(title, count, sources);
         wrap.append(heading);
         const list = document.createElement("div");
@@ -814,21 +780,21 @@
             divider.className = "bob-relevance-divider";
             list.append(divider);
           }
-          list.append(renderCard(board, card, label));
+          list.append(renderCard(initiative, card, label));
           lastRelevance = card.relevance;
         }
         wrap.append(list);
         return wrap;
       }
 
-      function bandColumnNames(board, label) {
+      function bandColumnNames(initiative, label) {
         const sourceUuids =
-          label === "Active" ? board.active_column_uuids : board.next_column_uuids;
-        const columnsByUuid = new Map(board.columns.map((column) => [column.uuid, column.name]));
+          label === "Active" ? initiative.active_column_uuids : initiative.next_column_uuids;
+        const columnsByUuid = new Map(initiative.columns.map((column) => [column.uuid, column.name]));
         return sourceUuids.map((uuid) => columnsByUuid.get(uuid)).filter(Boolean);
       }
 
-      function renderCard(board, card, band) {
+      function renderCard(initiative, card, band) {
         const row = document.createElement("div");
         row.className = "bob-card" + (card.selected ? " selected" : "");
         applyCardTransition(row, card);
@@ -850,7 +816,7 @@
         row.append(cardDiscussionTools(card));
         row.append(cardPeople(card));
 
-        const statusOptions = board.columns.map((column) => [column.uuid, column.name]);
+        const statusOptions = initiative.columns.map((column) => [column.uuid, column.name]);
         if (band === "Active") {
           statusOptions.push(["__selected__", "Selected"]);
         }
@@ -871,7 +837,7 @@
             }
             run(
               (request) =>
-                request("/api/cockpit/kanban/cards/move", {
+                request("/api/cockpit/initiative/cards/move", {
                   card_uuid: card.uuid,
                   column_uuid: value,
                   index: 0,
@@ -885,42 +851,38 @@
       }
 
       function applyCardTransition(row, card) {
-        const info = card.transition;
-        if (!info || info.stage === "settled") return;
-        row.classList.add("diff", `stage-${info.stage}`);
-        row.title = transitionLabel(info);
+        SovereignUI.decorateTransition(row, card.transition);
       }
 
       function cardDiscussionTools(card) {
         const wrap = document.createElement("div");
         wrap.className = "bob-card-discussion-tools";
         const info = card.transition;
-        if (!info || ["settled", "in_flight"].includes(info.stage)) return wrap;
+        if (!info || info.reactable === false) return wrap;
         // The control is Core's, so a divergence offers the same acts, worded
         // the same way, whether it is met here or in the application itself.
         const control = SovereignUI.reactionControl({
           info,
+          density: "inline",
           className: "bob-react",
-          onReact: (choice) => applyReaction(card.uuid, choice),
+          onReact: (choice) => applyReaction(card.uuid, choice, "initiative"),
         });
         if (control) wrap.append(control);
         return wrap;
       }
 
-      async function applyReaction(uuid, choice) {
-        const endpoint =
-          choice.action === "rollback"
-            ? "/api/cockpit/kanban/rollback"
-            : "/api/cockpit/kanban/adopt";
+      async function applyReaction(uuid, choice, applicationId = "") {
+        applicationId = applicationId || state?.selected_topic?.application_id || "";
         await run(
           (request) =>
-            request(endpoint, {
+            request("/api/cockpit/react", {
+              application_id: applicationId,
               source_addr: choice.peerAddr,
               node_uuid: uuid,
-              adopt_absence: choice.action === "adopt" && choice.absent,
-              rollback_absence: choice.action === "rollback" && choice.absent,
+              reaction: choice.action,
+              absent: choice.absent,
             }),
-          choice.action === "rollback" ? "Rolled back" : "Adopted",
+          choice.action === "rollback" ? "Taken back" : "Adopted",
         );
       }
 
@@ -995,8 +957,8 @@
       }
 
       function pickerCandidates() {
-        // Not board-scoped (unlike initiative.html's picker) - Overview spans
-        // every board and has no per-board peer topic here, so this offers
+        // Not topic-scoped (unlike initiative.html's picker) - Overview spans
+        // every initiative and has no per-initiative peer topic here, so this offers
         // every peer the session knows about instead.
         const known = state.people || [];
         const already = modalParticipants
@@ -1049,39 +1011,39 @@
         modalOwner = select.value || null;
       }
 
-      function setExpanded(board, expanded) {
+      function setExpanded(initiative, expanded) {
         return submitMutation({
-          key: `expanded:${board.uuid}`,
-          command: "set-board-expanded",
-          arguments: { uuid: board.uuid, expanded },
+          key: `expanded:${initiative.uuid}`,
+          command: "set-initiative-expanded",
+          arguments: { uuid: initiative.uuid, expanded },
           action: (request) =>
-            request("/api/cockpit/boards/settings", { board_uuid: board.uuid, expanded }),
+            request("/api/cockpit/initiatives/settings", { initiative_uuid: initiative.uuid, expanded }),
           successMessage: expanded ? "Expanded" : "Collapsed",
           project: (draft, change) => {
-            const target = (draft.boards || []).find((entry) => entry.uuid === change.uuid);
+            const target = (draft.initiatives || []).find((entry) => entry.uuid === change.uuid);
             if (target) target.expanded = change.expanded;
             return draft;
           },
         });
       }
 
-      function openBoardSettings(board) {
-        settingsBoard = board;
-        el("boardSettingsTitle").textContent = board.name;
-        const fields = el("boardSettingsFields");
+      function openInitiativeSettings(initiative) {
+        settingsInitiative = initiative;
+        el("initiativeSettingsTitle").textContent = initiative.name;
+        const fields = el("initiativeSettingsFields");
         fields.replaceChildren();
         fields.append(
           selectField(
             "settingsActiveColumn",
             "Active column",
-            board.columns,
-            board.active_column_uuid || "",
+            initiative.columns,
+            initiative.active_column_uuid || "",
           ),
           selectField(
             "settingsNextColumn",
             "Next column",
-            board.columns,
-            board.next_column_uuid || "",
+            initiative.columns,
+            initiative.next_column_uuid || "",
           ),
         );
         const active = el("settingsActiveColumn");
@@ -1098,7 +1060,7 @@
             SovereignUI.refreshSelect(active);
           }
         };
-        el("boardSettingsModal").showModal();
+        el("initiativeSettingsModal").showModal();
       }
 
       function openTeamSettings(team) {
@@ -1135,8 +1097,8 @@
       function snapshotExportConfig(applicationId) {
         const config = {
           initiative: {
-            path: "/api/cockpit/kanban/snapshots/export",
-            key: "board_uuid",
+            path: "/api/cockpit/initiative/snapshots/export",
+            key: "initiative_uuid",
           },
           team: {
             path: "/api/cockpit/team/snapshots/export",
@@ -1206,25 +1168,46 @@
         }
       }
 
-      el("cancelBoardSettingsBtn").onclick = () => el("boardSettingsModal").close();
-      el("saveBoardSnapshotBtn").onclick = () => {
-        const board = settingsBoard;
-        if (!board) return;
-        el("boardSettingsModal").close();
-        saveSnapshotFile("initiative", board.uuid, board.name || "Untitled initiative");
+      el("cancelInitiativeSettingsBtn").onclick = () => el("initiativeSettingsModal").close();
+      el("saveInitiativeSnapshotBtn").onclick = () => {
+        const initiative = settingsInitiative;
+        if (!initiative) return;
+        el("initiativeSettingsModal").close();
+        saveSnapshotFile("initiative", initiative.uuid, initiative.name || "Untitled initiative");
       };
-      el("deleteBoardSettingsBtn").onclick = () => {
-        const board = settingsBoard;
-        if (!board) return;
+      // Dropping is not deleting. Nothing is published and nobody else loses
+      // anything - this client stops holding it, and a peer who still
+      // publishes it will offer it back. Core refuses while something here
+      // still references it, and says how many places do.
+      el("dropInitiativeBtn").onclick = () => {
+        const initiative = settingsInitiative;
+        if (!initiative) return;
+        confirmAction(
+          "Stop holding this initiative?",
+          "It leaves this client only. Everybody else keeps theirs, and it "
+          + "comes back if somebody still sharing it offers it again.",
+          () => {
+            el("initiativeSettingsModal").close();
+            return run(
+              (request) =>
+                request("/api/cockpit/topics/drop", {topic_uuid: initiative.uuid}),
+              "Initiative dropped",
+            );
+          },
+        );
+      };
+      el("deleteInitiativeSettingsBtn").onclick = () => {
+        const initiative = settingsInitiative;
+        if (!initiative) return;
         confirmAction(
           "Delete this initiative?",
           "This removes the initiative and all of its cards. This cannot be undone.",
           () => {
-            el("boardSettingsModal").close();
+            el("initiativeSettingsModal").close();
             return run(
               (request) =>
-                request("/api/cockpit/kanban/boards/delete", {
-                  board_uuid: board.uuid,
+                request("/api/cockpit/initiative/initiatives/delete", {
+                  initiative_uuid: initiative.uuid,
                 }),
               "Initiative deleted",
             );
@@ -1237,6 +1220,24 @@
         if (!team) return;
         el("agreementSettingsModal").close();
         saveSnapshotFile("team", team.uuid, team.title || "Untitled organization");
+      };
+      el("dropTeamBtn").onclick = () => {
+        const team = settingsTeam;
+        if (!team) return;
+        const kind = team.is_organization ? "organization" : "team";
+        confirmAction(
+          `Stop holding this ${kind}?`,
+          `It leaves this client only. The other members keep theirs, and `
+          + `it comes back if somebody still sharing it offers it again.`,
+          () => {
+            el("agreementSettingsModal").close();
+            return run(
+              (request) =>
+                request("/api/cockpit/topics/drop", {topic_uuid: team.uuid}),
+              `${team.is_organization ? "Organization" : "Team"} dropped`,
+            );
+          },
+        );
       };
       el("deleteTeamBtn").onclick = () => {
         const team = settingsTeam;
@@ -1288,13 +1289,13 @@
           },
         );
       };
-      el("saveBoardSettingsBtn").onclick = () => {
-        const board = settingsBoard;
-        el("boardSettingsModal").close();
+      el("saveInitiativeSettingsBtn").onclick = () => {
+        const initiative = settingsInitiative;
+        el("initiativeSettingsModal").close();
         run(
           (request) =>
-            request("/api/cockpit/boards/settings", {
-              board_uuid: board.uuid,
+            request("/api/cockpit/initiatives/settings", {
+              initiative_uuid: initiative.uuid,
               active_column_uuid: el("settingsActiveColumn").value,
               next_column_uuid: el("settingsNextColumn").value,
             }),
@@ -1409,7 +1410,7 @@
           el("cardModal").close();
           return run(
             (request) =>
-              request("/api/cockpit/kanban/cards/delete", { card_uuid: card.uuid }),
+              request("/api/cockpit/initiative/cards/delete", { card_uuid: card.uuid }),
             "Card deleted",
           );
         });
@@ -1421,7 +1422,7 @@
         el("cardModal").close();
         run(
           (request) =>
-            request("/api/cockpit/kanban/cards/update", {
+            request("/api/cockpit/initiative/cards/update", {
               card_uuid: card.uuid,
               name: el("cardName").value,
               description: el("cardDescription").value,
@@ -1431,8 +1432,6 @@
           "Card updated",
         );
       });
-
-      const addNew = el("cockpitHeaderControls").content.querySelector("#addNewBtn");
 
       SovereignShell.mount({
         container: el("shell"),
@@ -1453,12 +1452,12 @@
           }
           if (app === "initiative") {
             return {
-              topicKey: "board_uuid",
-              create: "/api/cockpit/kanban/agenda/create",
-              delete: "/api/cockpit/kanban/agenda/delete",
-              update: "/api/cockpit/kanban/agenda/update",
-              setPriority: "/api/cockpit/kanban/agenda/set_priority",
-              move: "/api/cockpit/kanban/agenda/move",
+              topicKey: "initiative_uuid",
+              create: "/api/cockpit/initiative/agenda/create",
+              delete: "/api/cockpit/initiative/agenda/delete",
+              update: "/api/cockpit/initiative/agenda/update",
+              setPriority: "/api/cockpit/initiative/agenda/set_priority",
+              move: "/api/cockpit/initiative/agenda/move",
             };
           }
           if (app === "flow") {
@@ -1475,262 +1474,58 @@
         },
         autoAdoptRoute: () =>
           state?.selected_topic?.application_id === "initiative"
-            ? { path: "/api/cockpit/kanban/auto_adopt", topicKey: "board_uuid" }
+            ? { path: "/api/cockpit/initiative/auto_adopt", topicKey: "initiative_uuid" }
             : null,
         autoAdoptLabels: AUTO_ADOPT_LABELS,
         autoAdoptDescriptions: AUTO_ADOPT_DESCRIPTIONS,
-        // Reacting from the pane is offered only where the Cockpit has routes
-        // to honour it. It carries a board's decisions; a team's or a
-        // process's are settled in that application, so their divergences stay
-        // shown here and answered there.
-        canReact: () => state?.selected_topic?.application_id === "initiative",
+        // A route without its owning facade would bypass neither governance
+        // nor failure: it simply cannot honour the act, so no control appears.
+        canReact: () => Boolean(
+          state?.sources?.[state?.selected_topic?.application_id]?.available,
+        ),
         reactNode: (uuid, choice) => applyReaction(uuid, choice),
         sessionView,
         onChanged: () => load(),
       });
-      SovereignShell.setAppActions(addNew);
-
       // "+ Add new" drops a menu of the topic-creating applications this host
-      // actually has - the cockpit routes to each application's create flow
-      // rather than creating anything itself. The board flow keeps its
-      // template modal; a new team appears as a tile, and you stay here
-      // to keep adding, exactly as creating a board leaves you here.
-      function clearSnapshotImport(applicationId, select, file, status) {
-        snapshotImports[applicationId] = null;
-        file.value = "";
-        status.textContent = "";
-        select.disabled = false;
-        SovereignUI.refreshSelect(select);
-      }
-
-      function bindSnapshotLoader(applicationId, buttonId, fileId, statusId, nameId, selectId) {
-        const button = el(buttonId);
-        const file = el(fileId);
-        const status = el(statusId);
-        const name = el(nameId);
-        const select = el(selectId);
-        button.onclick = () => {
-          file.value = "";
-          file.click();
-        };
-        file.onchange = async () => {
-          const chosen = file.files?.[0];
-          if (!chosen) return;
-          try {
-            if (chosen.size > 50 * 1024 * 1024) {
-              throw new Error("Snapshot file is too large.");
-            }
-            const snapshot = JSON.parse(await chosen.text());
-            if (
-              snapshot?.format !== "s-protocol.item-snapshot" ||
-              snapshot?.format_version !== 1 ||
-              snapshot?.item_type !== applicationId ||
-              typeof snapshot?.content !== "object" ||
-              snapshot.content === null
-            ) {
-              throw new Error(`This file does not contain a compatible ${applicationId} snapshot.`);
-            }
-            snapshotImports[applicationId] = snapshot;
-            status.textContent = `Loaded: ${snapshot.name || chosen.name}`;
-            select.disabled = true;
-            if (!name.value.trim() && snapshot.source_name) name.value = snapshot.source_name;
-            SovereignUI.refreshSelect(select);
-          } catch (error) {
-            clearSnapshotImport(applicationId, select, file, status);
-            showToast(error instanceof SyntaxError ? "Snapshot file is not valid JSON" : error.message, true);
-          }
-        };
-      }
-
-      bindSnapshotLoader(
-        "initiative", "loadBoardSnapshotBtn", "boardSnapshotFile",
-        "boardSnapshotFileStatus", "newBoardName", "newBoardTemplate",
-      );
-      bindSnapshotLoader(
-        "team", "loadTeamSnapshotBtn", "teamSnapshotFile",
-        "teamSnapshotFileStatus", "newTeamName", "newTeamTemplate",
-      );
-      bindSnapshotLoader(
-        "flow", "loadFlowSnapshotBtn", "flowSnapshotFile",
-        "flowSnapshotFileStatus", "newFlowName", "newFlowTemplate",
-      );
-
-      function openNewBoardModal() {
-        el("newBoardName").value = "";
-        const select = el("newBoardTemplate");
-        SovereignUI.selectOptions(
-          select,
-          (state.boards || []).map((board) => ({
-            value: board.uuid,
-            label: board.name,
-            group: "Current initiatives",
-            dataset: {source: "current"},
-          })),
-          {emptyLabel: "Start empty", value: ""},
-        );
-        select.options[0].dataset.source = "blank";
-        clearSnapshotImport(
-          "initiative", select, el("boardSnapshotFile"), el("boardSnapshotFileStatus"),
-        );
-        el("newBoardModal").showModal();
-      }
-
-      // Copying a team is choosing where a new one starts, so it lives
-      // in the flow that makes one - the same modal shape a new board uses.
-      // A team copied this way arrives with the text and the roles and
-      // nobody in it, which is what a template is.
-      function openNewTeamModal() {
-        el("newTeamName").value = "";
-        const select = el("newTeamTemplate");
-        SovereignUI.selectOptions(
-          select,
-          (state.teams || []).map((team) => ({
-            value: team.uuid,
-            label: team.title || "Untitled team",
-            group: "Current organizations",
-            dataset: {source: "current"},
-          })),
-          {emptyLabel: "Start empty", value: ""},
-        );
-        select.options[0].dataset.source = "blank";
-        clearSnapshotImport(
-          "team", select, el("teamSnapshotFile"), el("teamSnapshotFileStatus"),
-        );
-        el("newTeamModal").showModal();
-      }
-
-      function openNewFlowModal() {
-        el("newFlowName").value = "";
-        const select = el("newFlowTemplate");
-        SovereignUI.selectOptions(
-          select,
-          (state.flow_templates || []).map((template) => ({
-            value: template.id,
+      // actually has - the Cockpit creates nothing itself. A new tile appears
+      // and you stay here to keep adding.
+      //
+      // One function for all three kinds. It was three, differing in the
+      // noun, in what there was to start from, and in which of eight routes
+      // to post to. Core answers the first two from what each application
+      // registered, and there is one route.
+      function openNewTopicModal(kind) {
+        SovereignShell.openNewTopicDialog({
+          noun: kind.noun,
+          templates: (kind.templates || []).map((template) => ({
+            value: template.value,
             label: template.name,
-            group: "Templates",
-            dataset: {
-              version: template.version,
-              source: "template",
-              description: template.description || "",
-            },
+            group: `Start from an existing ${kind.noun.toLowerCase()}`,
+            dataset: {description: template.description || ""},
           })),
-          {value: state.flow_templates?.[0]?.id || ""},
-        );
-        const updateDescription = () => {
-          const option = select.selectedOptions[0];
-          el("newFlowTemplateDescription").textContent = option?.dataset.description || "";
-        };
-        select.onchange = updateDescription;
-        clearSnapshotImport(
-          "flow", select, el("flowSnapshotFile"), el("flowSnapshotFileStatus"),
-        );
-        updateDescription();
-        el("newFlowModal").showModal();
+          templateRequired: kind.template_required,
+          snapshotType: kind.application_id,
+          onCreate: ({name, template, snapshot}) => run(
+            (request) => request("/api/cockpit/topics/create", {
+              application_id: kind.application_id,
+              title: name,
+              template,
+              snapshot,
+            }),
+            `${kind.noun} created`,
+          ),
+        });
       }
 
       SovereignUI.actionMenu({
         button: el("addNewBtn"),
         align: "end",
         emptyMessage: "No item type is available",
-        items: () => (state.creatable || []).map((item) => ({
-          label: item.label,
-          onSelect: () => {
-            if (item.application_id === "team") openNewTeamModal();
-            else if (item.application_id === "flow") openNewFlowModal();
-            else openNewBoardModal();
-          },
+        items: () => (state.creatable || []).map((kind) => ({
+          label: kind.noun,
+          onSelect: () => openNewTopicModal(kind),
         })),
-      });
-
-      el("cancelNewBoardBtn").onclick = () => el("newBoardModal").close();
-      el("newBoardForm").addEventListener("submit", (event) => {
-        event.preventDefault();
-        const name = el("newBoardName").value.trim() || "Untitled initiative";
-        const select = el("newBoardTemplate");
-        const templateUuid = select.value;
-        const snapshot = snapshotImports.initiative;
-        el("newBoardModal").close();
-        run(async (request) => {
-          if (snapshot) {
-            return request("/api/cockpit/kanban/snapshots/create", {
-              snapshot,
-              name,
-            });
-          }
-          if (templateUuid) {
-            const result = await request(
-              "/api/cockpit/kanban/boards/copy",
-              { board_uuid: templateUuid },
-              "copy",
-            );
-            if (result.value) {
-              await request(
-                "/api/cockpit/kanban/boards/rename",
-                { board_uuid: result.value, name },
-                "rename",
-              );
-            }
-            return result;
-          }
-          return request("/api/cockpit/kanban/boards/create", { name });
-        }, "Initiative created");
-      });
-
-      el("cancelNewTeamBtn").onclick = () => el("newTeamModal").close();
-      el("newTeamForm").addEventListener("submit", (event) => {
-        event.preventDefault();
-        const title = el("newTeamName").value.trim() || "Untitled organization";
-        const select = el("newTeamTemplate");
-        const templateUuid = select.value;
-        const snapshot = snapshotImports.team;
-        el("newTeamModal").close();
-        // One request either way: clone takes the title, so unlike a board
-        // copy there is nothing to rename afterwards.
-        run(
-          (request) =>
-            snapshot
-              ? request("/api/cockpit/team/snapshots/create", {
-                  snapshot,
-                  title,
-                })
-              : templateUuid
-              ? request("/api/cockpit/team/teams/clone", {
-                  team_uuid: templateUuid,
-                  title,
-                })
-              : request("/api/cockpit/team/teams/create", {
-                  title,
-                }),
-          "Organization created",
-        );
-      });
-
-      el("cancelNewFlowBtn").onclick = () => el("newFlowModal").close();
-      el("newFlowForm").addEventListener("submit", (event) => {
-        event.preventDefault();
-        const title = el("newFlowName").value.trim() || "Untitled flow";
-        const select = el("newFlowTemplate");
-        const definitionId = select.value;
-        const snapshot = snapshotImports.flow;
-        const definitionVersion = select.selectedOptions[0]?.dataset.version || "";
-        if (!snapshot && (!definitionId || !definitionVersion)) {
-          showToast("Choose a flow template or load a snapshot file", true);
-          return;
-        }
-        el("newFlowModal").close();
-        run(
-          (request) => snapshot
-            ? request("/api/cockpit/flow/snapshots/create", {
-                snapshot,
-                title,
-              })
-            : request("/api/cockpit/flow/processes/create", {
-                title,
-                definition_id: definitionId,
-                definition_version: definitionVersion,
-              }),
-          "Flow created",
-        );
       });
 
       // The shell's pane always shares the selected topic, so sharing any
@@ -1748,7 +1543,7 @@
         const topicUuid = params.get("share");
         if (!topicUuid) return;
         const topic = [
-          ...(state.boards || []),
+          ...(state.initiatives || []),
           ...(state.teams || []),
           ...(state.processes || []),
         ].find((entry) => entry.uuid === topicUuid);
@@ -1762,7 +1557,7 @@
         .then(openShareModalFromUrl)
         .catch((err) => showToast(err.message, true));
 
-      function isEditingBoards() {
+      function isEditingTiles() {
         // Refreshing rebuilds #boards from scratch, which would yank focus
         // out from under an in-progress edit (objective text, card fields,
         // the status dropdown) - skip the poll while one of those is
@@ -1774,12 +1569,12 @@
       sessionView.startPolling({
         views: ["tiles", "context"],
         intervalMs: 1500,
-        when: () => !isEditingBoards(),
+        when: () => !isEditingTiles(),
       });
       // Presence can age without changing application data. Refresh only the
       // selected topic's collaboration fragment, never every tile.
       setInterval(() => {
-        if (!isEditingBoards()) {
+        if (!isEditingTiles()) {
           sessionView.refresh("context").catch((error) => showToast(error.message, true));
         }
       }, 3000);

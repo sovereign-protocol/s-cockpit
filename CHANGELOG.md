@@ -2,6 +2,86 @@
 
 ## Unreleased
 
+- **The tile family is `initiatives`, beside `teams` and `processes`.**
+  `board_settings`, `update_board_settings`, `pick_board`, `reorder_boards`
+  and `board_uuid` follow S-Initiative's rename of everything that means the
+  topic; the routes are `/api/cockpit/initiatives/*`. Board of Boards keeps
+  its name, and so do the `bob-board*` classes — those draw a tile, and team
+  and flow tiles use them too, so they name no topic at all.
+
+- **The application is named `initiative` wherever it is named.** The route
+  segment is `/api/cockpit/initiative/*`, the facade accessor is
+  `_initiative()` with the `self.initiative` property beside `_team()` and
+  `_flow()`, and the forwarding methods are `react_to_initiative_node`,
+  `create_initiative_agenda_item` and `set_initiative_auto_adopt`. This
+  segment had been left as `kanban` on the reading that it names the facade
+  the call is forwarded to. It does not: Core's facade registry is keyed by
+  `application_id` alone, that key is `initiative`, and `_kanban()` looked it
+  up under `INITIATIVE_APPLICATION_ID` — so `kanban` named nothing that
+  exists. The page's `APP_ICONS` key and the `test-kanban` extra (now
+  `test-initiative`, with the CI job that installs it) moved with it.
+  `kanban_column` and `kanban_card` are untouched: a Kanban board is still
+  what organises an initiative.
+
+- **The initiative, team and flow facades are required at versions 4, 4 and 2**,
+  matching each application's bump for the shared `react_to_node` reaction
+  endpoint and, for initiative and team, retiring their own connected-work
+  methods and payload keys for Core's shared `sovereign_relationship`
+  (s-core/DESIGN_NAVIGATION_LINKS.md) — nothing here read them directly, so
+  the bump is the whole of what changes on this side. All four must be
+  released together.
+
+- **Team and flow tiles carry a transition marker too.** Board of Boards
+  already dotted an initiative tile with its highest-priority stage; team and
+  flow tiles now read `transition_by_node` off the same `collaboration_context`
+  call and get the identical dot, so a change waiting on you looks the same
+  regardless of which application owns the topic. `sources` now reports
+  whether the team and flow facades are available at all, beside initiative's
+  existing flag.
+
+- **Per-tile display settings reset once.** `board_settings` became
+  `initiative_settings` in local application metadata, so expand/collapse,
+  band column mappings and tile order start fresh. Local-only, never shared.
+
+- **The page's tile keys are asserted from the page's side**, by the same
+  source scan S-Initiative now carries: `tiles_payload` is parsed for the keys
+  it writes and every `state.<key>` the page reads must be one of them.
+
+- **"+ Add new…" came out of the shell's bar.** The bar holds nothing of an
+  application's now, so the button sits above the tiles it adds to. The
+  navigation row the shell draws under a topic name is deliberately absent
+  here: the Cockpit already shows every topic you hold, so a line offering a
+  few of them — and offering the Cockpit itself — would be the second
+  navigation mesh Core has refused since U3. Auto-adopt wording is inherited
+  from Core rather than copied. See `DESIGN_UI_CONSISTENCY.md` U7.
+
+- **Eight create routes became one, and six create methods became none.**
+  `/api/cockpit/topics/create` makes a topic of any kind through Core's
+  registry; the per-application create, copy and from-snapshot routes and
+  their logic methods are gone, along with the list of nouns and the flow
+  template lookup — `session.topic_kinds()` answers all three. Adding a
+  fourth topic-creating application needs no change here at all.
+
+- **Tiles ask the shell where another application's topic is.**
+  `SovereignShell.topicHref(applicationId, uuid)` replaces three hardcoded
+  routes, so an application deactivated on this host loses its links instead
+  of keeping ones that go nowhere.
+
+- **Three new-item dialogs became one.** New Initiative, New Organization and
+  New Flow were the same form three times, differing in the noun and in
+  whether a template was required. They are three calls to the shell's
+  `openNewTopicDialog` now, each passing its noun, what there is to start
+  from, and the create call. Nothing changes about what any of them makes.
+
+- **"Stop holding it" beside Delete**, on an initiative and on a team. The
+  Cockpit holds everything this client has, so this is where "I do not want
+  this here any more" belongs, and it is not a delete: nothing is published,
+  everybody else keeps theirs, and a peer who still publishes it will offer it
+  back. Core refuses while anything here still references the topic and says
+  how many places do. Removing a reference is not offered here and does not
+  belong here — the Cockpit holds no links, so a reference comes off where it
+  was made.
+
 - Agenda counts and Collaboration panes now use Core's verified perspective
   projection while mutations continue to target locally authored items only.
   The staleness window is Core's default rather than a Cockpit declaration;
